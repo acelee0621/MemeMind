@@ -31,10 +31,7 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "miniosecret"
     MINIO_USE_SSL: bool = False
     MINIO_BUCKET: str = "mememind"
-
-    # Resend 配置
-    RESEND_API_KEY: str
-
+    
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )
