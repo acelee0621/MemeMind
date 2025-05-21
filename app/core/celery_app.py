@@ -12,7 +12,7 @@ celery_app = Celery(
     "mememind",
     broker=CELERY_BROKER_URL,
     backend=CELERY_RESULT_BACKEND,
-    include=["app.tasks.reminder_task", "app.tasks.mail_task"],
+    include=["app.tasks.document_task"],
 )
 
 celery_app.conf.update(
@@ -22,7 +22,7 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=True,
     result_expires=3600,
-    task_routes={"app.tasks.reminder_task.*": {"queue": "reminder_queue"}},
+    task_routes={"app.tasks.document_task.*": {"queue": "document_queue"}},
 )
 
 
