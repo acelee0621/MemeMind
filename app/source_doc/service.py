@@ -30,7 +30,7 @@ class SourceDocumentService:
         self.repository = repository
 
     async def add_document(
-        self, file: UploadFile, current_user
+        self, file: UploadFile, current_user: dict | None
     ) -> SourceDocumentResponse:
         # ===== 1. 文件元数据处理,从 UploadFile 获取文件元数据 =====
         original_filename = file.filename or f"unnamed_{uuid.uuid4()}"
@@ -112,7 +112,7 @@ class SourceDocumentService:
             )
 
     async def get_document(
-        self, document_id: int, current_user
+        self, document_id: int, current_user: dict | None
     ) -> SourceDocumentResponse:
         document = await self.repository.get_by_id(document_id, current_user)
         return SourceDocumentResponse.model_validate(document)
@@ -122,7 +122,7 @@ class SourceDocumentService:
         order_by: str | None,
         limit: int,
         offset: int,
-        current_user,
+        current_user: dict | None,
     ) -> list[SourceDocumentResponse]:
         documents = await self.repository.get_all(
             order_by=order_by,
@@ -134,7 +134,7 @@ class SourceDocumentService:
             SourceDocumentResponse.model_validate(document) for document in documents
         ]
 
-    async def delete_document(self, document_id: int, current_user) -> None:
+    async def delete_document(self, document_id: int, current_user: dict | None) -> None:
         # 先删除数据库记录
         document = await self.get_document(
             document_id=document_id, current_user=current_user
@@ -158,7 +158,7 @@ class SourceDocumentService:
                 detail=f"Unexpected error deleting document {document_id}: {str(e)}",
             )
 
-    async def download_document(self, document_id: int, current_user):
+    async def download_document(self, document_id: int, current_user: dict | None):
         document = await self.get_document(
             document_id=document_id, current_user=current_user
         )
@@ -197,7 +197,7 @@ class SourceDocumentService:
             raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
     async def get_presigned_url(
-        self, document_id: int, current_user
+        self, document_id: int, current_user: dict | None
     ) -> PresignedUrlResponse:
         document = await self.get_document(
             document_id=document_id, current_user=current_user

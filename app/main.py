@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.core.s3_client import ensure_minio_bucket_exists
 from app.utils.migrations import run_migrations
+from app.source_doc.routes import router as source_doc_router
 
 # Set up logging configuration
 setup_logging()
@@ -37,6 +38,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+app.include_router(source_doc_router)
 
 @app.get("/health")
 async def health_check(response: Response):

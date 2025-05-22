@@ -54,7 +54,7 @@ class SourceDocumentUpdate(BaseSchema):
 # 附件响应模型
 class SourceDocumentResponse(SourceDocumentBase):
     id: int = Field(..., description="附件ID")
-    owner_id: int = Field(..., description="所属用户ID")
+    owner_id: int | None = Field(..., description="所属用户ID")
     status: str = Field(..., description="文件状态")
     processed_at: datetime | None = Field(..., description="处理时间")
     error_message: str | None = Field(..., description="错误信息")

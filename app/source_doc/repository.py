@@ -4,21 +4,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AlreadyExistsException, NotFoundException
 from app.models.models import SourceDocument
-from app.schemas.schemas import SourceDocumentCreate,SourceDocumentUpdate
+from app.schemas.schemas import SourceDocumentCreate, SourceDocumentUpdate
 
 
 class SourceDocumentRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, data: SourceDocumentCreate, current_user) -> SourceDocument:
+    async def create(
+        self, data: SourceDocumentCreate, current_user: dict | None
+    ) -> SourceDocument:
         new_document = SourceDocument(
             object_name=data.object_name,
             bucket_name=data.bucket_name,
             original_filename=data.original_filename,
             content_type=data.content_type,
             size=data.size,
-            owner_id=current_user.id,
+            owner_id=current_user.id if current_user else None,
         )
         self.session.add(new_document)
         try:
@@ -31,11 +33,12 @@ class SourceDocumentRepository:
                 f"SourceDocument with content {data.original_filename} already exists"
             )
 
-    async def get_by_id(self, document_id: int, current_user) -> SourceDocument:
-        query = select(SourceDocument).where(
-            SourceDocument.id == document_id,
-            SourceDocument.owner_id == current_user.id,
-        )
+    async def get_by_id(
+        self, document_id: int, current_user: dict | None
+    ) -> SourceDocument:
+        query = select(SourceDocument).where(SourceDocument.id == document_id)
+        if current_user:  # 仅当 current_user 存在时添加 owner_id 过滤
+            query = query.where(SourceDocument.owner_id == current_user.id)
         result = await self.session.scalars(query)
         document = result.one_or_none()
         if not document:
@@ -55,9 +58,11 @@ class SourceDocumentRepository:
         limit: int,
         offset: int,
         order_by: str | None,
-        current_user,
+        current_user: dict | None,
     ) -> list[SourceDocument]:
-        query = select(SourceDocument).where(SourceDocument.owner_id == current_user.id)
+        query = select(SourceDocument)
+        if current_user:  # 仅当 current_user 存在时添加 owner_id 过滤
+            query = query.where(SourceDocument.owner_id == current_user.id)
 
         if order_by:
             if order_by == "created_at desc":
@@ -70,16 +75,15 @@ class SourceDocumentRepository:
 
         result = await self.session.scalars(query)
         return list(result.all())
-    
-    async def update(self, data: SourceDocumentUpdate, document_id: int) -> SourceDocument:
-        
+
+    async def update(
+        self, data: SourceDocumentUpdate, document_id: int
+    ) -> SourceDocument:
         query = select(SourceDocument).where(SourceDocument.id == document_id)
         result = await self.session.scalars(query)
         document = result.one_or_none()
         if not document:
-            raise NotFoundException(
-                f"Document with id {document_id} not found."
-            )
+            raise NotFoundException(f"Document with id {document_id} not found.")
         update_data = data.model_dump(exclude_unset=True)
         # 确保不修改 id 和 owner_id
         update_data.pop("id", None)
@@ -92,11 +96,10 @@ class SourceDocumentRepository:
         await self.session.refresh(document)
         return document
 
-    async def delete(self, document_id: int, current_user) -> None:
-        document = await self.session.get(SourceDocument, document_id)
-
-        if not document or document.owner_id != current_user.id:
-            raise NotFoundException(f"Attachment with id {document_id} not found")
-
+    async def delete(self, document_id: int, current_user: dict | None) -> None:
+        try:
+            document = await self.get_by_id(document_id, current_user)
+        except NotFoundException:
+            raise  # 直接抛出 NotFoundException
         await self.session.delete(document)
         await self.session.commit()
