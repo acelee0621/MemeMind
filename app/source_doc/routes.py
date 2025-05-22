@@ -15,7 +15,7 @@ from app.schemas.param_schemas import DocumentQueryParams
 logger = get_logger(__name__)
 
 
-router = APIRouter(prefix="/document", tags=["Document"])
+router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
 def get_document_service(
@@ -32,7 +32,7 @@ def get_document_service(
     status_code=status.HTTP_201_CREATED,
     summary="Upload Document",
 )
-async def upload_document(
+async def upload_document_route(
     file: Annotated[
         UploadFile, File(..., title="Source Document", description="Upload a file")
     ],
@@ -53,7 +53,7 @@ async def upload_document(
     response_class=StreamingResponse,
     summary="Download document",
 )
-async def download_attachment(
+async def download_attachment_route(
     document_id: int,
     service: SourceDocumentService = Depends(get_document_service),
     # current_user: UserResponse = Depends(get_current_user),
@@ -69,11 +69,11 @@ async def download_attachment(
 
 
 @router.delete(
-    "/{attachment_id}",
+    "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an document",
 )
-async def delete_attachment(
+async def delete_attachment_route(
     document_id: int,
     service: SourceDocumentService = Depends(get_document_service),
     # current_user: UserResponse = Depends(get_current_user),
@@ -92,7 +92,7 @@ async def delete_attachment(
     summary="Get all documents Info",
 )
 async def get_all_documents(
-    params: Annotated[DocumentQueryParams, Query()],
+    params: DocumentQueryParams = Depends(),
     service: SourceDocumentService = Depends(get_document_service),
     # current_user: UserResponse = Depends(get_current_user),
 ) -> list[SourceDocumentResponse]:
@@ -103,10 +103,10 @@ async def get_all_documents(
             offset=params.offset,
             current_user=None,
         )
-        logger.info(f"Retrieved {len(all_documents)} attachments")
+        logger.info(f"Retrieved {len(all_documents)} documents")
         return all_documents
     except Exception as e:
-        logger.error(f"Failed to fetch all attachments: {str(e)}")
+        logger.error(f"Failed to fetch all documents: {str(e)}")
         raise
 
 

@@ -1,4 +1,3 @@
-from typing import Optional
 import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
@@ -14,6 +13,7 @@ from app.core.celery_app import celery_app
 from app.core.exceptions import NotFoundException, ForbiddenException
 from app.source_doc.repository import SourceDocumentRepository
 from app.schemas.schemas import (
+    UserResponse,    
     SourceDocumentCreate,
     SourceDocumentUpdate,
     SourceDocumentResponse,
@@ -30,7 +30,7 @@ class SourceDocumentService:
         self.repository = repository
 
     async def add_document(
-        self, file: UploadFile, current_user: dict | None
+        self, file: UploadFile, current_user: UserResponse | None
     ) -> SourceDocumentResponse:
         # ===== 1. 文件元数据处理,从 UploadFile 获取文件元数据 =====
         original_filename = file.filename or f"unnamed_{uuid.uuid4()}"
@@ -112,7 +112,7 @@ class SourceDocumentService:
             )
 
     async def get_document(
-        self, document_id: int, current_user: dict | None
+        self, document_id: int, current_user: UserResponse | None
     ) -> SourceDocumentResponse:
         document = await self.repository.get_by_id(document_id, current_user)
         return SourceDocumentResponse.model_validate(document)
@@ -122,7 +122,7 @@ class SourceDocumentService:
         order_by: str | None,
         limit: int,
         offset: int,
-        current_user: dict | None,
+        current_user: UserResponse | None,
     ) -> list[SourceDocumentResponse]:
         documents = await self.repository.get_all(
             order_by=order_by,
@@ -134,7 +134,9 @@ class SourceDocumentService:
             SourceDocumentResponse.model_validate(document) for document in documents
         ]
 
-    async def delete_document(self, document_id: int, current_user: dict | None) -> None:
+    async def delete_document(
+        self, document_id: int, current_user: UserResponse | None
+    ) -> None:
         # 先删除数据库记录
         document = await self.get_document(
             document_id=document_id, current_user=current_user
@@ -158,7 +160,7 @@ class SourceDocumentService:
                 detail=f"Unexpected error deleting document {document_id}: {str(e)}",
             )
 
-    async def download_document(self, document_id: int, current_user: dict | None):
+    async def download_document(self, document_id: int, current_user: UserResponse | None):
         document = await self.get_document(
             document_id=document_id, current_user=current_user
         )
@@ -197,7 +199,7 @@ class SourceDocumentService:
             raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
     async def get_presigned_url(
-        self, document_id: int, current_user: dict | None
+        self, document_id: int, current_user: UserResponse | None
     ) -> PresignedUrlResponse:
         document = await self.get_document(
             document_id=document_id, current_user=current_user
@@ -240,18 +242,18 @@ class SourceDocumentService:
     async def update_document_processing_info(
         self,
         document_id: int,
-        status: Optional[str] = None,
-        processed_at: Optional[datetime] = None,
-        number_of_chunks: Optional[int] = None,
-        error_message: Optional[str] = None,  # 传入 None 来清除错误信息
+        current_user: dict | None,
+        status: str | None,
+        processed_at: datetime | None,
+        number_of_chunks: int | None,
+        error_message: str | None,  # 传入 None 来清除错误信息
         set_processed_now: bool = False,  # 便捷标志，用于将 processed_at 设置为当前时间
-    ) -> SourceDocumentResponse:        
-
+    ) -> SourceDocumentResponse:
         # 确定 processed_at 的值
         actual_processed_at = processed_at
         if set_processed_now:
             actual_processed_at = datetime.now(timezone.utc)
-        
+
         update_payload = SourceDocumentUpdate(
             status=status,
             processed_at=actual_processed_at,
@@ -261,20 +263,20 @@ class SourceDocumentService:
 
         try:
             updated_document = await self.repository.update(
-                data=update_payload, document_id=document_id
+                data=update_payload, document_id=document_id, current_user=current_user
             )
             logger.info(f"成功更新文档 ID: {document_id} 的处理信息")
             return SourceDocumentResponse.model_validate(updated_document)
 
-        except ValueError as e: 
-            logger.warning(f"为文档 {document_id} 调用更新，但无有效更改: {str(e)}")            
+        except ValueError as e:
+            logger.warning(f"为文档 {document_id} 调用更新，但无有效更改: {str(e)}")
             raise HTTPException(
                 status_code=400,
                 detail=f"未提供有效字段进行更新或未检测到更改: {str(e)}",
             )
-        except NotFoundException:            
+        except NotFoundException:
             raise
-        except Exception as e:            
+        except Exception as e:
             logger.error(f"更新文档 {document_id} 处理信息时发生意外错误: {str(e)}")
             raise HTTPException(
                 status_code=500, detail="更新文档处理信息时发生意外错误。"

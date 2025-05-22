@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AlreadyExistsException, NotFoundException
 from app.models.models import SourceDocument
-from app.schemas.schemas import SourceDocumentCreate, SourceDocumentUpdate
+from app.schemas.schemas import SourceDocumentCreate, SourceDocumentUpdate, UserResponse
 
 
 class SourceDocumentRepository:
@@ -12,7 +12,7 @@ class SourceDocumentRepository:
         self.session = session
 
     async def create(
-        self, data: SourceDocumentCreate, current_user: dict | None
+        self, data: SourceDocumentCreate, current_user: UserResponse | None
     ) -> SourceDocument:
         new_document = SourceDocument(
             object_name=data.object_name,
@@ -34,7 +34,7 @@ class SourceDocumentRepository:
             )
 
     async def get_by_id(
-        self, document_id: int, current_user: dict | None
+        self, document_id: int, current_user: UserResponse | None
     ) -> SourceDocument:
         query = select(SourceDocument).where(SourceDocument.id == document_id)
         if current_user:  # 仅当 current_user 存在时添加 owner_id 过滤
@@ -44,21 +44,14 @@ class SourceDocumentRepository:
         if not document:
             raise NotFoundException(f"SourceDocument with id {document_id} not found")
         return document
-
-    async def get_by_id_internal(self, document_id: int) -> SourceDocument:
-        query = select(SourceDocument).where(SourceDocument.id == document_id)
-        result = await self.session.scalars(query)
-        document = result.one_or_none()
-        if not document:
-            raise NotFoundException(f"SourceDocument with id {document_id} not found")
-        return document
+    
 
     async def get_all(
         self,
         limit: int,
         offset: int,
         order_by: str | None,
-        current_user: dict | None,
+        current_user: UserResponse | None,
     ) -> list[SourceDocument]:
         query = select(SourceDocument)
         if current_user:  # 仅当 current_user 存在时添加 owner_id 过滤
@@ -77,9 +70,11 @@ class SourceDocumentRepository:
         return list(result.all())
 
     async def update(
-        self, data: SourceDocumentUpdate, document_id: int
+        self, data: SourceDocumentUpdate, document_id: int, current_user: UserResponse | None
     ) -> SourceDocument:
         query = select(SourceDocument).where(SourceDocument.id == document_id)
+        if current_user:  # 仅当 current_user 存在时添加 owner_id 过滤
+            query = query.where(SourceDocument.owner_id == current_user.id)
         result = await self.session.scalars(query)
         document = result.one_or_none()
         if not document:
@@ -96,7 +91,7 @@ class SourceDocumentRepository:
         await self.session.refresh(document)
         return document
 
-    async def delete(self, document_id: int, current_user: dict | None) -> None:
+    async def delete(self, document_id: int, current_user: UserResponse | None) -> None:
         try:
             document = await self.get_by_id(document_id, current_user)
         except NotFoundException:
