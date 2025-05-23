@@ -1,3 +1,4 @@
+from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
@@ -72,5 +73,49 @@ class PresignedUrlResponse(BaseModel):
     content_type: str = Field(..., description="MIME type of the attachment")
     size: int = Field(..., description="Size of the attachment in bytes")
     attachment_id: int = Field(..., description="ID of the attachment")
+    
+    
+# --- TextChunk Pydantic Models ---
 
+class TextChunkBase(BaseSchema):
+    """
+    TextChunk 基础模型，包含通用字段。
+    """
+    chunk_text: str = Field(..., description="文本块的实际内容")
+    sequence_in_document: int = Field(..., ge=0, description="文本块在原文档中的顺序编号，从0开始")
+    metadata_json: dict[str, Any] | None = Field(None, description="与文本块相关的其他元数据，例如页码、章节等")
+
+
+class TextChunkCreate(TextChunkBase):
+    """
+    用于创建新 TextChunk 记录的模型。
+    在 Celery 任务中，当你从文档中分割出文本块后，会用这个模型 (或类似的数据结构)
+    来准备将要存入数据库的数据。
+    """
+    source_document_id: int = Field(..., description="关联的源文档ID")
+    # chunk_text, sequence_in_document, metadata_json 继承自 TextChunkBase
+
+
+class TextChunkUpdate(BaseSchema):
+    """
+    用于更新现有 TextChunk 记录的模型 (可选)。
+    RAG 流程中通常不直接更新已生成的块，更多是删除旧块并创建新块。
+    但如果需要，可以定义此模型。
+    """
+    chunk_text: str | None = Field(None, description="更新后的文本块内容")
+    metadata_json: dict[str, Any] | None = Field(None, description="更新后的元数据")
+    
+
+
+class TextChunkResponse(TextChunkBase):
+    """
+    用于 API 响应或内部数据表示的 TextChunk 模型。
+    包含从数据库读取的完整信息，包括ID和时间戳。
+    """
+    id: int = Field(..., description="文本块的唯一ID")
+    source_document_id: int = Field(..., description="关联的源文档ID")
+    created_at: datetime = Field(..., description="记录创建时间")
+    updated_at: datetime = Field(..., description="记录最后更新时间")
+    # 如果需要，可以在这里添加关联的 SourceDocument 的摘要信息 (需要嵌套 Pydantic 模型)
+    # source_document: Optional[SourceDocumentInfo] = None # 例如
 
