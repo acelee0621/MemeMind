@@ -90,7 +90,7 @@ class SourceDocumentService:
         )
         try:
             new_document = await self.repository.create(document_data, current_user)
-            result = SourceDocumentResponse.model_validate(new_document)
+            result = SourceDocumentResponse.model_validate(new_document)            
             celery_app.send_task(
                 "app.tasks.document_task.process_document_task",
                 args=[new_document.id],
@@ -243,10 +243,10 @@ class SourceDocumentService:
         self,
         document_id: int,
         current_user: dict | None,
-        status: str | None,
-        processed_at: datetime | None,
-        number_of_chunks: int | None,
-        error_message: str | None,  # 传入 None 来清除错误信息
+        status: str | None = None,
+        processed_at: datetime | None = None,
+        number_of_chunks: int | None = None,
+        error_message: str | None = None, 
         set_processed_now: bool = False,  # 便捷标志，用于将 processed_at 设置为当前时间
     ) -> SourceDocumentResponse:
         # 确定 processed_at 的值

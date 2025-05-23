@@ -26,4 +26,4 @@ celery_app.conf.update(
 )
 
 
-# uv run celery -A app.core.celery_app worker --loglevel=info --pool=threads -Q celery,reminder_queue --autoscale=4,2
+# uv run celery -A app.core.celery_app worker --loglevel=info --pool=threads -Q celery,document_queue --autoscale=4,2
