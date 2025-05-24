@@ -1,7 +1,5 @@
-import os
 import asyncio
 
-import redis
 from asgiref.sync import async_to_sync
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -19,20 +17,11 @@ from app.schemas.schemas import TextChunkCreate
 logger = get_logger(__name__)
 
 
-redis_host = os.getenv("REDIS_HOST", "localhost:6379")
-REDIS_URL = f"redis://{redis_host}/0"
-
-redis_client = redis.from_url(
-    REDIS_URL,
-    health_check_interval=30,
-)
-
-
 def parse_txt_bytes(file_bytes: bytes) -> str:
     """
     解析 TXT 文件字节流。
     """
-    logger.info("开始解析 TXT 内容...")
+    logger.info("文本格式为 TXT ，开始解析...")
     try:
         raw_text = file_bytes.decode(
             "utf-8"
@@ -171,11 +160,9 @@ async def _execute_document_processing_async(
 
             # ==================================================================
             # 第5步：将文本内容分割成小块 (Chunks)
-            # ==================================================================
-            # 你需要选择并实现一个分块策略。这里使用一个概念性的简单分块器。
-            # 实际中你可能会用 LangChain 的 RecursiveCharacterTextSplitter 或类似工具。
+            # ==================================================================            
 
-            # 示例：简单的按固定长度（大致）分块，带重叠 (你需要一个更成熟的方案)
+            # 示例：简单的按固定长度（大致）分块，带重叠
             chunk_size = 1000  # 每个块的目标字符数
             chunk_overlap = 100  # 相邻块之间的重叠字符数
 
@@ -331,9 +318,7 @@ async def _execute_document_processing_async(
     # retry_kwargs={'max_retries': 3, 'countdown': 60} # 重试参数
 )
 def process_document_task(self, document_id: int):  # bind=True后，第一个参数是self
-    task_id_log_prefix = f"[Celery Task ID: {self.request.id}]"  # 用于日志追踪
-    logger.info(f"{task_id_log_prefix} 开始处理文档 ID: {document_id}")
-
+    task_id_log_prefix = f"[Celery Task ID: {self.request.id}]"  # 用于日志追踪    
     logger.info(
         f"{task_id_log_prefix} (Sync Entry with asgiref - Minimal Test) 接收到文档 ID: {document_id}"
     )
