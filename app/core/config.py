@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     MINIO_USE_SSL: bool = False
     MINIO_BUCKET: str = "mememind"
     
+    # ChromaDB 配置 ...
+    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500" # ChromaDB HTTP 访问地址
+    CHROMA_COLLECTION_NAME: str = "mememind_rag_collection" # ChromaDB 集合名称
+    
+    # Embedding 模型相关
+    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = "为这个句子生成表示以用于检索相关文章："
+    CHUNK_SIZE: int = 1000 
+    CHUNK_OVERLAP: int = 100
+    
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )

@@ -4,14 +4,18 @@ from asgiref.sync import async_to_sync
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from app.core.logging import get_logger
+from app.core.config import settings
 from app.core.celery_app import celery_app
 from app.core.s3_client import s3_client
 from app.core.database import SessionLocal
+from app.core.embedding import get_embeddings
+from app.core.chromadb_client import get_chroma_collection
 from app.source_doc.repository import SourceDocumentRepository
 from app.source_doc.service import SourceDocumentService
 from app.text_chunk.repository import TextChunkRepository
 from app.text_chunk.service import TextChunkService
-from app.schemas.schemas import TextChunkCreate
+from app.models.models import TextChunk
+from app.schemas.schemas import SourceDocumentResponse, TextChunkCreate
 
 
 logger = get_logger(__name__)
@@ -47,6 +51,10 @@ async def _execute_document_processing_async(
 
     source_doc_service: SourceDocumentService
     text_chunk_service: TextChunkService
+    
+    document_response: SourceDocumentResponse | None = None
+    number_of_chunks_created = 0 # 初始化
+    
     try:
         async with SessionLocal() as db:
             logger_instance.info(
@@ -58,8 +66,10 @@ async def _execute_document_processing_async(
             source_doc_service = SourceDocumentService(source_doc_repo)
             text_chunk_repo = TextChunkRepository(db)
             text_chunk_service = TextChunkService(text_chunk_repo)
-
-            # 1. 获取文档元数据
+            
+            # ==================================================================
+            # 第1步：获取文档元数据
+            # ==================================================================
             document_response = await source_doc_service.get_document(
                 document_id=document_id, current_user=None
             )
@@ -73,8 +83,10 @@ async def _execute_document_processing_async(
             logger_instance.info(
                 f"{task_id_for_log} (Async Logic) 成功获取文档 {document_response.id} (原始文件名: {document_response.original_filename})"
             )
-
-            # 2. 更新文档状态为 "processing"
+            
+            # ==================================================================
+            # 第2步：更新文档状态为 "processing"
+            # ==================================================================
             await source_doc_service.update_document_processing_info(
                 document_id=document_response.id, current_user=None, status="processing"
             )
@@ -82,7 +94,9 @@ async def _execute_document_processing_async(
                 f"{task_id_for_log} (Async Logic) 文档 {document_response.id} 状态更新为 'processing'"
             )
 
-            # 3. 从 S3 (MinIO) 下载文档内容
+            # ==================================================================
+            # 第3步：从 S3 (MinIO) 下载文档内容
+            # ==================================================================
             file_content_bytes: bytes
             try:
                 s3_object = await asyncio.to_thread(
@@ -117,7 +131,8 @@ async def _execute_document_processing_async(
             try:
                 if "text/plain" in content_type or original_filename.endswith(".txt"):
                     raw_text = parse_txt_bytes(file_content_bytes)
-                else:
+                # TODO: 添加更多文件类型的支持
+                else:                    
                     unsupported_msg = f"不支持的文件类型: {document_response.content_type} (文件名: {document_response.original_filename})"
                     logger_instance.warning(f"{task_id_for_log} {unsupported_msg}")
                     await source_doc_service.update_document_processing_info(
@@ -163,8 +178,8 @@ async def _execute_document_processing_async(
             # ==================================================================            
 
             # 示例：简单的按固定长度（大致）分块，带重叠
-            chunk_size = 1000  # 每个块的目标字符数
-            chunk_overlap = 100  # 相邻块之间的重叠字符数
+            chunk_size = settings.CHUNK_SIZE  # 每个块的目标字符数
+            chunk_overlap = settings.CHUNK_OVERLAP  # 相邻块之间的重叠字符数
 
             text_splitter = RecursiveCharacterTextSplitter(
                 chunk_size=chunk_size,
@@ -197,6 +212,7 @@ async def _execute_document_processing_async(
             # ==================================================================
             # 第6步：将文本块存入数据库 (使用 TextChunkService)
             # ==================================================================
+            created_chunk_db_objects: list[TextChunk] = [] # 用于存储返回的 ORM 对象
             if chunks_texts_list:
                 chunks_to_create: list[TextChunkCreate] = []
                 for i, chunk_text_content in enumerate(chunks_texts_list):
@@ -219,12 +235,12 @@ async def _execute_document_processing_async(
                     )
 
                 try:
-                    created_chunk_responses = (
+                    created_chunk_db_objects = (
                         await text_chunk_service.add_chunks_for_document(
                             chunks_data=chunks_to_create
                         )
                     )
-                    number_of_chunks_created = len(created_chunk_responses)
+                    number_of_chunks_created = len(created_chunk_db_objects)
                     logger_instance.info(
                         f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 的 {number_of_chunks_created} 个文本块已存入数据库"
                     )
@@ -247,22 +263,68 @@ async def _execute_document_processing_async(
                 )
 
             # ==================================================================
-            # 第7、8步占位：向量化文本块并存入向量数据库
+            # 第7步：为文本块生成向量嵌入
             # ==================================================================
-            # TODO:
-            # 1. 加载/获取你的文本嵌入模型 (Embedding Model)
-            #    embedding_model = SentenceTransformer('your-chosen-model')
-            # 2. 从数据库获取刚创建的文本块内容 (如果需要，或者直接用 chunks_texts_list)
-            #    db_chunks_for_embedding = await text_chunk_service.get_document_chunks_for_display(document_id, limit=number_of_chunks_created)
-            #    texts_to_embed = [chunk.chunk_text for chunk in db_chunks_for_embedding]
-            #    chunk_ids_for_vector_db = [str(chunk.id) for chunk in db_chunks_for_embedding]
-            # 3. 为文本块生成向量
-            #    embeddings = embedding_model.encode(texts_to_embed)
-            # 4. 将 (向量, TextChunk ID, 其他元数据) 存入向量数据库
-            #    vector_db.add(ids=chunk_ids_for_vector_db, embeddings=embeddings, metadatas=...)
-            logger_instance.info(
-                f"{task_id_for_log} (Async Logic) TODO: 实现向量化和向量存储逻辑 for doc ID: {document_id}"
-            )
+            if created_chunk_db_objects: # 仅当有成功创建的文本块时才进行向量化
+                texts_to_embed = [chunk.chunk_text for chunk in created_chunk_db_objects]
+                
+                logger_instance.info(f"{task_id_for_log} (Async Logic) 开始为 {len(texts_to_embed)} 个文本块生成向量嵌入...")
+                try:
+                    # 将同步的 embedding 操作放到线程中执行，避免阻塞事件循环
+                    embeddings_list = await asyncio.to_thread(
+                        get_embeddings, 
+                        texts_to_embed, 
+                        instruction=settings.EMBEDDING_INSTRUCTION_FOR_RETRIEVAL
+                    )
+                    logger_instance.info(f"{task_id_for_log} (Async Logic) 成功生成 {len(embeddings_list)} 组向量嵌入。")
+                except Exception as embed_error:
+                    logger_instance.error(f"{task_id_for_log} (Async Logic) 生成向量嵌入失败: {embed_error}", exc_info=True)
+                    await source_doc_service.update_document_processing_info(
+                        document_id=document_response.id, current_user=None, status="error",
+                        error_message=f"向量化失败: {str(embed_error)[:255]}",
+                        number_of_chunks=number_of_chunks_created # 已创建的块数量还是记录一下
+                    )
+                    raise embed_error
+                
+                # ==================================================================
+                # 第8步：将向量和文本块的关联信息存入向量数据库 (ChromaDB)
+                # ==================================================================
+                if embeddings_list:
+                    chroma_chunk_ids = [str(chunk.id) for chunk in created_chunk_db_objects] # ChromaDB 需要字符串ID
+                    chroma_metadatas = [
+                        {
+                            "source_document_id": document_response.id,
+                            "original_filename": document_response.original_filename,
+                            "text_chunk_db_id": chunk.id, # 对应 PostgreSQL TextChunk 表的ID
+                            "sequence": chunk.sequence_in_document
+                        } for chunk in created_chunk_db_objects
+                    ]
+                    # 有些向量数据库也允许存储文档本身，ChromaDB 也支持
+                    # chroma_documents_text = texts_to_embed 
+
+                    try:
+                        logger_instance.info(f"{task_id_for_log} (Async Logic) 准备将向量存入 ChromaDB 集合: {settings.CHROMA_COLLECTION_NAME}...")
+                        chroma_collection = await asyncio.to_thread(get_chroma_collection) # 获取集合也可能是阻塞的
+                        
+                        # ChromaDB 的 add/upsert 是同步的，也需要用 to_thread
+                        await asyncio.to_thread(
+                            chroma_collection.add, # 或者 .upsert 如果你想支持幂等更新
+                            ids=chroma_chunk_ids,
+                            embeddings=embeddings_list,
+                            metadatas=chroma_metadatas,
+                            # documents=chroma_documents_text # 可选
+                        )
+                        logger_instance.info(f"{task_id_for_log} (Async Logic) 成功将 {len(chroma_chunk_ids)} 个向量存入 ChromaDB。")
+                    except Exception as chroma_error:
+                        logger_instance.error(f"{task_id_for_log} (Async Logic) 存入 ChromaDB 失败: {chroma_error}", exc_info=True)
+                        await source_doc_service.update_document_processing_info(
+                            document_id=document_response.id, current_user=None, status="error",
+                            error_message=f"向量存储失败: {str(chroma_error)[:255]}",
+                            number_of_chunks=number_of_chunks_created
+                        )
+                        raise chroma_error
+            else: # 如果没有文本块被创建和向量化
+                 logger_instance.info(f"{task_id_for_log} (Async Logic) 没有文本块进行向量化和存储。文档ID: {document_id}")
 
             # ==================================================================
             # 第9步：更新最终文档状态为 "ready"
