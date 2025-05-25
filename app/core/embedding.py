@@ -1,9 +1,9 @@
 from pathlib import Path
 
+from loguru import logger
 from transformers import AutoTokenizer, AutoModel
 import torch  # PyTorch 是 Transformers 的依赖之一
 
-from app.core.logging import get_logger
 
 # 在线模型
 EMBEDDING_MODEL_NAME = "maidalun1020/bce-embedding-base_v1"
@@ -17,8 +17,6 @@ EMBEDDING_MODEL_PATH = "app/embeddings/bce-embedding-base_v1"
 tokenizer = None
 embedding_model_global = None  # 使用 embedding_model_global 以区分局部变量
 device = None
-
-logger = get_logger(__name__)
 
 
 def _load_embedding_model():

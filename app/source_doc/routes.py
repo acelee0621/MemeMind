@@ -1,18 +1,15 @@
 from typing import Annotated, Union
 
+from loguru import logger
 from fastapi import APIRouter, Depends, Query, UploadFile, File, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.logging import get_logger
 from app.source_doc.service import SourceDocumentService
 from app.source_doc.repository import SourceDocumentRepository
 from app.schemas.schemas import SourceDocumentResponse, PresignedUrlResponse
 from app.schemas.param_schemas import DocumentQueryParams
-
-
-logger = get_logger(__name__)
 
 
 router = APIRouter(prefix="/documents", tags=["Documents"])

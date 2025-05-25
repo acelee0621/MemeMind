@@ -1,9 +1,9 @@
 import asyncio
 
+from loguru import logger
 from asgiref.sync import async_to_sync
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-from app.core.logging import get_logger
 from app.core.config import settings
 from app.core.celery_app import celery_app
 from app.core.s3_client import s3_client
@@ -16,9 +16,6 @@ from app.text_chunk.repository import TextChunkRepository
 from app.text_chunk.service import TextChunkService
 from app.models.models import TextChunk
 from app.schemas.schemas import SourceDocumentResponse, TextChunkCreate
-
-
-logger = get_logger(__name__)
 
 
 def parse_txt_bytes(file_bytes: bytes) -> str:

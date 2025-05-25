@@ -1,16 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Body
 from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
 
 from app.core.database import get_db
-from app.core.logging import get_logger
 from app.text_chunk.repository import TextChunkRepository # QueryService 依赖 TextChunkService
 from app.text_chunk.service import TextChunkService     # QueryService 依赖 TextChunkService
 from app.schemas.schemas import TextChunkResponse
-from .service import QueryService # 导入你刚创建的 QueryService
+from .service import QueryService
 
-logger = get_logger(__name__)
 
 router = APIRouter(prefix="/query", tags=["Query & RAG"])
 
@@ -24,7 +22,7 @@ class QueryRequest(BaseModel): # 定义请求体
     query: str
     top_k: int = 5
 
-@router.post("/retrieve-chunks", response_model=List[TextChunkResponse])
+@router.post("/retrieve-chunks", response_model=list[TextChunkResponse])
 async def retrieve_chunks_for_query(
     request_data: QueryRequest, # 使用请求体
     query_service: QueryService = Depends(get_query_service)

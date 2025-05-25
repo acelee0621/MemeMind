@@ -2,11 +2,11 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
+from loguru import logger
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
 from botocore.exceptions import ClientError
 
-from app.core.logging import get_logger
 from app.core.config import settings
 from app.core.s3_client import s3_client
 from app.core.celery_app import celery_app
@@ -19,8 +19,6 @@ from app.schemas.schemas import (
     SourceDocumentResponse,
     PresignedUrlResponse,
 )
-
-logger = get_logger(__name__)
 
 
 class SourceDocumentService:

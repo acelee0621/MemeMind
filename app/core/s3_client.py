@@ -1,12 +1,10 @@
 import boto3
+from loguru import logger
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import settings
-from app.core.logging import get_logger
 from app.core.exceptions import ForbiddenException
-
-logger = get_logger(__name__)
 
 
 s3_client = boto3.client(

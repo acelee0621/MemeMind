@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     
     # Embedding 模型相关
     EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = ""
-    CHUNK_SIZE: int = 500 
+    CHUNK_SIZE: int = 512 
     CHUNK_OVERLAP: int = 50
     
     model_config = SettingsConfigDict(

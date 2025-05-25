@@ -1,10 +1,7 @@
-from app.core.logging import get_logger
+from loguru import logger
+
 from app.text_chunk.repository import TextChunkRepository
 from app.schemas.schemas import TextChunkCreate, TextChunkResponse
-
-
-# Set up logger for this module
-logger = get_logger(__name__)
 
 
 class TextChunkService:

@@ -6,16 +6,11 @@ from contextlib import asynccontextmanager
 
 
 from app.core.config import settings
-from app.core.logging import setup_logging, get_logger
+# from app.core.logging import setup_logging, get_logger
 from app.core.s3_client import ensure_minio_bucket_exists
 from app.utils.migrations import run_migrations
 from app.source_doc.routes import router as source_doc_router
 from app.query.routes import router as query_router
-
-# Set up logging configuration
-setup_logging()
-logger = get_logger(__name__)
-logger.info("Logging configuration completed.")
 
 
 # Run migrations on startup
