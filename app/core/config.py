@@ -37,9 +37,9 @@ class Settings(BaseSettings):
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection" # ChromaDB 集合名称
     
     # Embedding 模型相关
-    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = "为这个句子生成表示以用于检索相关文章："
-    CHUNK_SIZE: int = 1000 
-    CHUNK_OVERLAP: int = 100
+    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = ""
+    CHUNK_SIZE: int = 500 
+    CHUNK_OVERLAP: int = 50
     
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"

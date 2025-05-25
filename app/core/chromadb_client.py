@@ -1,3 +1,5 @@
+import chromadb
+
 from app.core.logging import get_logger
 from app.core.config import settings
 
@@ -17,8 +19,6 @@ def get_chroma_collection():
             # 可以直接使用容器名和容器端口，例如 http://chromadb:8000
             # 如果 Celery worker 运行在宿主机，则使用宿主机IP/localhost 和映射的端口 5500
             # settings.CHROMA_HTTP_ENDPOINT = "http://localhost:5500"
-            import chromadb  # 确保导入
-
             chroma_client = chromadb.HttpClient(settings.CHROMA_HTTP_ENDPOINT)
             logger.info(f"ChromaDB 客户端已连接到: {settings.CHROMA_HTTP_ENDPOINT}")
         except Exception as e:
