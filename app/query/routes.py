@@ -33,7 +33,7 @@ async def retrieve_chunks_for_query(
     try:
         relevant_chunks = await query_service.retrieve_relevant_chunks(
             query_text=request_data.query, 
-            top_k=request_data.top_k
+            top_k_final_reranked=request_data.top_k
         )
         if not relevant_chunks:
             # 可以返回空列表，或者根据业务需求抛出 404

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 512 
     CHUNK_OVERLAP: int = 50
     
+    # Reranker 相关配置
+    INITIAL_RETRIEVAL_TOP_K: int = 50 # 第一阶段向量召回的数量
+    FINAL_CONTEXT_TOP_N: int = 5    # Rerank 后最终选取的数量
+    
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )
