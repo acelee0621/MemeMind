@@ -10,11 +10,11 @@ from alembic import context
 
 from app.models.models import (
     Base,
-    User,
-    SourceDocument,
-    TextChunk,
-    Conversation,
-    Message,
+    # User,
+    # SourceDocument,
+    # TextChunk,
+    # Conversation,
+    # Message,
 )
 
 # 加载环境变量

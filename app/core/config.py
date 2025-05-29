@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     INITIAL_RETRIEVAL_TOP_K: int = 50 # 第一阶段向量召回的数量
     FINAL_CONTEXT_TOP_N: int = 5    # Rerank 后最终选取的数量
     
+    # LLM 相关配置
+    LLM_MODEL_PATH: str = "app/llm_models/qwen3-4b-q2_k_gguf/Qwen3-4B-Q2_K.gguf"
+    LLM_N_CTX: int = 2048  # LLM 的上下文窗口大小，根据模型调整
+    LLM_N_GPU_LAYERS: int = 0 # 卸载到 GPU 的层数，0 表示仅使用 CPU。
+    
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )

@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 app/embeddings
+app/llm_models
 
 # Virtual environments
 .venv
