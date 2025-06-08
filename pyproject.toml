@@ -5,14 +5,18 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+<<<<<<< HEAD
     "accelerate>=1.7.0",
     "alembic>=1.15.2",
+=======
+    "alembic>=1.16.1",
+>>>>>>> 0387f88da373c2df750fce16a071c9f717fe5c87
     "asgiref>=3.8.1",
     "asyncpg>=0.30.0",
     "boto3>=1.38.19",
     "celery>=5.5.2",
-    "chromadb==1.0.0",
-    "fastapi[standard]==0.115.9",
+    "chromadb>=1.0.11",
+    "fastapi[standard]>=0.115.9",
     "langchain>=0.3.25",
     "loguru>=0.7.3",
     "pydantic-settings>=2.9.1",
