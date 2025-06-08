@@ -4,10 +4,10 @@ from loguru import logger
 
 # --- 核心和工具类导入 ---
 from app.core.config import settings
-from app.core.embedding import get_embeddings
+from app.core.embedding_qwen import get_embeddings
 from app.core.chromadb_client import get_chroma_collection
-from app.core.reranker import rerank_documents # 假设你已创建 reranker.py 并定义了此函数
-from app.core.database import SessionLocal # 用于创建数据库会话
+from app.core.reranker_qwen import rerank_documents
+from app.core.database import create_engine_and_session_for_celery
 
 # --- 服务和仓库层导入 ---
 from app.text_chunk.service import TextChunkService
@@ -86,6 +86,7 @@ async def execute_query_processing_async(
     包含数据库会话管理、服务实例化、查询向量化、向量召回、
     获取文本块、Rerank精排，并返回最终的文本块列表。
     """
+    db_engine, SessionLocal = create_engine_and_session_for_celery()
     logger.info(
         f"{task_id_for_log} (Async Query Logic) 开始处理查询: '{query_text[:100]}...', 目标返回精排后 top {top_k_final_reranked} 条"
     )
@@ -178,3 +179,10 @@ async def execute_query_processing_async(
         # 对于查询处理任务，通常没有像文档处理那样的“状态”可以更新到数据库来标记错误。
         # 主要依赖 Celery 将任务标记为失败，并记录异常信息。
         raise e # 将异常向上抛给 async_to_sync，再由同步任务的 except 块处理
+    
+    finally:
+        # 最终清理
+        # 无论成功还是失败，最后都要关闭数据库引擎的连接池
+        logger.info(f"{task_id_for_log} (Async Logic) 关闭数据库连接池...")
+        await db_engine.dispose()
+        logger.info(f"{task_id_for_log} (Async Logic) 异步资源清理完毕。")

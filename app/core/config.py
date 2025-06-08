@@ -31,25 +31,25 @@ class Settings(BaseSettings):
     MINIO_SECRET_KEY: str = "miniosecret"
     MINIO_USE_SSL: bool = False
     MINIO_BUCKET: str = "mememind"
-    
+
     # ChromaDB 配置 ...
-    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500" # ChromaDB HTTP 访问地址
-    CHROMA_COLLECTION_NAME: str = "mememind_rag_collection" # ChromaDB 集合名称
-    
+    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500"  # ChromaDB HTTP 访问地址
+    CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"  # ChromaDB 集合名称
+
     # Embedding 模型相关
-    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = ""
-    CHUNK_SIZE: int = 512 
+    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = "为这个句子生成表示以用于检索相关文章"
+    EMBEDDING_DIMENSIONS: int = 1024  # 嵌入维度, Qwen 0.6B为1024 Qwen 4B为2560
+    CHUNK_SIZE: int = 512
     CHUNK_OVERLAP: int = 50
-    
+
     # Reranker 相关配置
-    INITIAL_RETRIEVAL_TOP_K: int = 50 # 第一阶段向量召回的数量
-    FINAL_CONTEXT_TOP_N: int = 5    # Rerank 后最终选取的数量
-    
+    INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
+    FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
+    RERANKER_INSTRUCTION: str = "给定一个网页搜索查询，检索回答该查询的相关段落"
+
     # LLM 相关配置
-    LLM_MODEL_PATH: str = "app/llm_models/qwen3-4b-q2_k_gguf/Qwen3-4B-Q2_K.gguf"
-    LLM_N_CTX: int = 2048  # LLM 的上下文窗口大小，根据模型调整
-    LLM_N_GPU_LAYERS: int = 0 # 卸载到 GPU 的层数，0 表示仅使用 CPU。
-    
+    LLM_MODEL_PATH: str = "app/llm_models/Qwen2.5-1.5B-Instruct"
+
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )

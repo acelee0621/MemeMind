@@ -5,8 +5,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from app.core.config import settings
 from app.core.s3_client import s3_client
-from app.core.database import SessionLocal
-from app.core.embedding import get_embeddings
+from app.core.database import create_engine_and_session_for_celery
+from app.core.embedding_qwen import get_embeddings
 from app.core.chromadb_client import get_chroma_collection
 from app.source_doc.repository import SourceDocumentRepository
 from app.source_doc.service import SourceDocumentService
@@ -38,9 +38,12 @@ def parse_txt_bytes(file_bytes: bytes) -> str:
 
 # --- 异步业务逻辑核心 ---
 async def _execute_document_processing_async(
-    document_id: int, task_id_for_log: str, logger_instance
+    document_id: int, task_id_for_log: str
 ):
-    logger_instance.info(
+    # 1. 延迟初始化：在函数开始时，为本次任务创建专属的数据库引擎和会话工厂
+    #    它们会自动绑定到由 Celery 任务创建的那个全新的事件循环上。
+    db_engine, SessionLocal = create_engine_and_session_for_celery()
+    logger.info(
         f"{task_id_for_log} (Async Logic) 开始处理文档 ID: {document_id}"
     )
 
@@ -52,7 +55,7 @@ async def _execute_document_processing_async(
 
     try:
         async with SessionLocal() as db:
-            logger_instance.info(
+            logger.info(
                 f"{task_id_for_log} (Async Logic) 数据库会话已为文档 ID {document_id} 创建"
             )
 
@@ -69,13 +72,13 @@ async def _execute_document_processing_async(
                 document_id=document_id, current_user=None
             )
             if not document_response:
-                logger_instance.error(
+                logger.error(
                     f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 未找到。任务终止。"
                 )
                 # 通常 Service 会抛 NotFoundException，这里是双重保障
                 return {"status": "error", "message": "Document not found in DB"}
 
-            logger_instance.info(
+            logger.info(
                 f"{task_id_for_log} (Async Logic) 成功获取文档 {document_response.id} (原始文件名: {document_response.original_filename})"
             )
 
@@ -85,7 +88,7 @@ async def _execute_document_processing_async(
             await source_doc_service.update_document_processing_info(
                 document_id=document_response.id, current_user=None, status="processing"
             )
-            logger_instance.info(
+            logger.info(
                 f"{task_id_for_log} (Async Logic) 文档 {document_response.id} 状态更新为 'processing'"
             )
 
@@ -100,11 +103,11 @@ async def _execute_document_processing_async(
                     Key=document_response.object_name,
                 )
                 file_content_bytes = s3_object["Body"].read()
-                logger_instance.info(
+                logger.info(
                     f"{task_id_for_log} (Async Logic) 文档 {document_response.object_name} ({len(file_content_bytes)} bytes) 已从 S3 下载。"
                 )
             except Exception as s3_error:
-                logger_instance.error(
+                logger.error(
                     f"{task_id_for_log} (Async Logic) 从 S3 下载文档 {document_response.object_name} 失败: {s3_error}",
                     exc_info=True,
                 )
@@ -129,7 +132,7 @@ async def _execute_document_processing_async(
                 # TODO: 添加更多文件类型的支持
                 else:
                     unsupported_msg = f"不支持的文件类型: {document_response.content_type} (文件名: {document_response.original_filename})"
-                    logger_instance.warning(f"{task_id_for_log} {unsupported_msg}")
+                    logger.warning(f"{task_id_for_log} {unsupported_msg}")
                     await source_doc_service.update_document_processing_info(
                         document_id=document_response.id,
                         current_user=None,
@@ -140,7 +143,7 @@ async def _execute_document_processing_async(
 
                 if not raw_text.strip():  # 如果解析后文本为空
                     empty_content_msg = "解析后文本内容为空"
-                    logger_instance.warning(
+                    logger.warning(
                         f"{task_id_for_log} {empty_content_msg} (文档ID: {document_id})"
                     )
                     await source_doc_service.update_document_processing_info(
@@ -151,12 +154,12 @@ async def _execute_document_processing_async(
                     )
                     return {"status": "error", "message": empty_content_msg}
 
-                logger_instance.info(
+                logger.info(
                     f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 内容解析完成，提取文本长度: {len(raw_text)}"
                 )
 
             except ValueError as parse_error:  # 捕获由解析函数抛出的 ValueError
-                logger_instance.error(
+                logger.error(
                     f"{task_id_for_log} (Async Logic) 解析文档 {document_response.original_filename} 失败: {parse_error}",
                     exc_info=True,
                 )
@@ -195,12 +198,12 @@ async def _execute_document_processing_async(
             if (
                 not chunks_texts_list and raw_text
             ):  # 如果有原始文本但未能分块（逻辑问题）
-                logger_instance.warning(
+                logger.warning(
                     f"{task_id_for_log} (Async Logic) 文本分块结果为空，但原始文本不为空。文档ID: {document_id}"
                 )
                 # 也许也应该标记为错误
 
-            logger_instance.info(
+            logger.info(
                 f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 被分割成 {len(chunks_texts_list)} 个文本块"
             )
 
@@ -236,11 +239,11 @@ async def _execute_document_processing_async(
                         )
                     )
                     number_of_chunks_created = len(created_chunk_db_objects)
-                    logger_instance.info(
+                    logger.info(
                         f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 的 {number_of_chunks_created} 个文本块已存入数据库"
                     )
                 except Exception as db_chunk_error:
-                    logger_instance.error(
+                    logger.error(
                         f"{task_id_for_log} (Async Logic) 存储文本块到数据库时失败 (文档ID: {document_id}): {db_chunk_error}",
                         exc_info=True,
                     )
@@ -253,7 +256,7 @@ async def _execute_document_processing_async(
                     raise db_chunk_error
             else:  # 如果没有文本块产生（例如原文件为空或解析后为空）
                 number_of_chunks_created = 0
-                logger_instance.info(
+                logger.info(
                     f"{task_id_for_log} (Async Logic) 文档 ID: {document_id} 未产生文本块可存储。"
                 )
 
@@ -265,7 +268,7 @@ async def _execute_document_processing_async(
                     chunk.chunk_text for chunk in created_chunk_db_objects
                 ]
 
-                logger_instance.info(
+                logger.info(
                     f"{task_id_for_log} (Async Logic) 开始为 {len(texts_to_embed)} 个文本块生成向量嵌入..."
                 )
                 try:
@@ -273,13 +276,15 @@ async def _execute_document_processing_async(
                     embeddings_list = await asyncio.to_thread(
                         get_embeddings,
                         texts_to_embed,
-                        instruction=settings.EMBEDDING_INSTRUCTION_FOR_RETRIEVAL,
+                        # instruction=settings.EMBEDDING_INSTRUCTION_FOR_RETRIEVAL,
+                        task_description=settings.EMBEDDING_INSTRUCTION_FOR_RETRIEVAL,
+                        is_query=False
                     )
-                    logger_instance.info(
+                    logger.info(
                         f"{task_id_for_log} (Async Logic) 成功生成 {len(embeddings_list)} 组向量嵌入。"
                     )
                 except Exception as embed_error:
-                    logger_instance.error(
+                    logger.error(
                         f"{task_id_for_log} (Async Logic) 生成向量嵌入失败: {embed_error}",
                         exc_info=True,
                     )
@@ -312,7 +317,7 @@ async def _execute_document_processing_async(
                     # chroma_documents_text = texts_to_embed
 
                     try:
-                        logger_instance.info(
+                        logger.info(
                             f"{task_id_for_log} (Async Logic) 准备将向量存入 ChromaDB 集合: {settings.CHROMA_COLLECTION_NAME}..."
                         )
                         chroma_collection = await asyncio.to_thread(
@@ -327,11 +332,11 @@ async def _execute_document_processing_async(
                             metadatas=chroma_metadatas,
                             # documents=chroma_documents_text # 可选
                         )
-                        logger_instance.info(
+                        logger.info(
                             f"{task_id_for_log} (Async Logic) 成功将 {len(chroma_chunk_ids)} 个向量存入 ChromaDB。"
                         )
                     except Exception as chroma_error:
-                        logger_instance.error(
+                        logger.error(
                             f"{task_id_for_log} (Async Logic) 存入 ChromaDB 失败: {chroma_error}",
                             exc_info=True,
                         )
@@ -344,7 +349,7 @@ async def _execute_document_processing_async(
                         )
                         raise chroma_error
             else:  # 如果没有文本块被创建和向量化
-                logger_instance.info(
+                logger.info(
                     f"{task_id_for_log} (Async Logic) 没有文本块进行向量化和存储。文档ID: {document_id}"
                 )
 
@@ -359,7 +364,7 @@ async def _execute_document_processing_async(
                 number_of_chunks=number_of_chunks_created,
                 error_message=None,  # 清除之前的错误信息
             )
-            logger_instance.info(
+            logger.info(
                 f"{task_id_for_log} (Async Logic) 文档 {document_response.id} 所有处理步骤完成，状态更新为 'ready'"
             )
             return {
@@ -369,7 +374,7 @@ async def _execute_document_processing_async(
             }
 
     except Exception as e:  # 捕获 _execute_document_processing_async 内部的顶层错误
-        logger_instance.error(
+        logger.error(
             f"{task_id_for_log} (Async Logic) 处理文档 ID: {document_id} 时发生无法处理的错误: {str(e)}",
             exc_info=True,
         )
@@ -387,8 +392,15 @@ async def _execute_document_processing_async(
                         error_message=f"Celery任务异步逻辑最终错误: {str(e)[:250]}",  # 确保不超过数据库字段长度
                     )
                 except Exception as final_update_error:
-                    logger_instance.error(
+                    logger.error(
                         f"{task_id_for_log} (Async Logic) 更新最终错误状态时再次失败: {final_update_error}",
                         exc_info=True,
                     )
         raise e  # 将异常向上抛给 asyncio.run()，再由同步任务的 except 块处理
+    
+    finally:
+        # 最终清理
+        # 无论成功还是失败，最后都要关闭数据库引擎的连接池
+        logger.info(f"{task_id_for_log} (Async Logic) 关闭数据库连接池...")
+        await db_engine.dispose()
+        logger.info(f"{task_id_for_log} (Async Logic) 异步资源清理完毕。")

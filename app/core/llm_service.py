@@ -1,72 +1,111 @@
-# app/core/llm_service.py
-from typing import Optional, List
 from pathlib import Path
-
+from typing import Optional
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from loguru import logger
-from llama_cpp import Llama # 从 llama_cpp 导入 Llama 类
-from app.core.config import settings
 
+# --- 全局变量，用于存储加载后的模型和分词器 ---
+llm_model: Optional[AutoModelForCausalLM] = None
+llm_tokenizer: Optional[AutoTokenizer] = None
 
-llm_instance: Optional[Llama] = None
+# --- 模型配置 ---
+LLM_MODEL_NAME = "Qwen/Qwen2.5-1.5B-Instruct"
+LLM_MODEL_PATH = "app/llm_models/Qwen2.5-1.5B-Instruct"
+
 
 def _load_llm_model():
     """
-    延迟加载 GGUF LLM 模型。
+    使用 transformers 库加载 Qwen2.5 模型。
+    这个函数将在 FastAPI 启动时被调用一次。
     """
-    global llm_instance
-    if llm_instance is None:
-        model_path_str = settings.LLM_MODEL_PATH
-        model_path = Path(model_path_str)
-        if not model_path.exists() or not model_path.is_file():
-            logger.error(f"LLM 模型文件未在指定路径找到: {model_path.absolute()}")
-            raise RuntimeError(f"LLM模型文件不存在: {model_path_str}")
+    global llm_model, llm_tokenizer
 
-        logger.info(f"首次加载 LLM 模型从: {model_path_str} ...")
+    if llm_model is None or llm_tokenizer is None:
+        logger.info(f"首次加载 LLM 模型: {LLM_MODEL_NAME} ...")
+
         try:
-            llm_instance = Llama(
-                model_path=model_path_str,
-                n_ctx=settings.LLM_N_CTX,             # 上下文窗口大小
-                n_gpu_layers=settings.LLM_N_GPU_LAYERS, # 卸载到 GPU 的层数 (0 表示 CPU)
-                verbose=False                         # 可以设为 True 查看 llama.cpp 的详细日志
-                # 还可以根据需要添加其他 llama-cpp-python 的参数，例如：
-                # n_batch=512, # Prompt processing batch size
-                # seed=-1, # 随机种子
+            model_path = Path(LLM_MODEL_PATH)
+            if not model_path.exists():
+                raise FileNotFoundError(f"模型路径不存在: {model_path.absolute()}")
+            # 2. 根据官方文档，使用 torch_dtype="auto" 进行更智能的类型选择
+            llm_model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                torch_dtype="auto",
+                device_map="auto",  # accelerate 会自动处理设备映射
             )
-            logger.info(f"LLM 模型 {model_path_str} 加载成功。GPU层数: {settings.LLM_N_GPU_LAYERS}")
+
+            llm_tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
+
+            # 将模型设置为评估模式
+            llm_model.eval()
+
+            device = next(llm_model.parameters()).device
+            logger.info(
+                f"LLM 模型 {LLM_MODEL_NAME} 加载成功，运行于设备: {device}"
+            )
+
         except Exception as e:
-            logger.error(f"加载 LLM 模型 {model_path_str} 失败: {e}", exc_info=True)
-            raise RuntimeError(f"无法加载 LLM 模型: {model_path_str}") from e
+            logger.error(
+                f"加载 LLM 模型 {LLM_MODEL_NAME} 失败: {e}", exc_info=True
+            )
+            raise RuntimeError(f"无法加载 LLM 模型: {LLM_MODEL_NAME}") from e
+
 
 def generate_text_from_llm(
     prompt: str,
-    max_tokens: int = 512,        # LLM 生成响应的最大 token 数
-    temperature: float = 0.7,     # 控制生成文本的随机性，值越低越确定
-    top_p: float = 0.9,           # 控制核心采样的概率阈值
-    stop: Optional[List[str]] = None # 可选的停止序列，例如 ["\nQuestion:", "用户："]
+    system_prompt: str = "You are a helpful assistant.",  # 可选的系统提示词
+    max_new_tokens: int = 512,
+    temperature: float = 0.7,
+    top_p: float = 0.9,
 ) -> str:
     """
-    使用加载的 LLM 根据给定的提示生成文本。
-    这是一个同步阻塞的操作。
+    使用加载的 Qwen2.5 模型根据给定的提示生成文本。
     """
-    _load_llm_model() # 确保模型已加载
-    if llm_instance is None: # 再次检查，理论上 _load_llm_model 会抛错如果失败
-        raise RuntimeError("LLM 模型实例未成功加载。")
+    _load_llm_model()
+    
+    if llm_model is None or llm_tokenizer is None:
+        raise RuntimeError("LLM 模型实例未成功加载，无法生成文本。")
 
-    logger.debug(f"向 LLM 发送的 Prompt (前200字符): {prompt[:200]}...")
+    logger.debug(f"向 LLM 发送的 Prompt (部分内容):\n{prompt[:100]}")
+
     try:
-        completion = llm_instance(
-            prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            stop=stop if stop else [], # llama_cpp expects a list for stop sequences
-            echo=False # 通常不希望 LLM 重复提示内容
+        # 构建符合 Qwen2.5-Instruct 模型的聊天模板
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        text = llm_tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
         )
-        
-        generated_text = completion["choices"][0]["text"].strip()
-        logger.info(f"LLM 生成的文本 (前100字符): {generated_text[:100]}...")
-        return generated_text
+
+        # 将格式化后的文本 tokenize
+        model_inputs = llm_tokenizer([text], return_tensors="pt").to(llm_model.device)
+
+        # 使用模型生成文本
+        with torch.no_grad():
+            # 3. 根据官方文档，使用 **model_inputs 解包方式传递参数
+            generated_ids = llm_model.generate(
+                **model_inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=True,
+                temperature=temperature,
+                top_p=top_p,
+            )
+
+        # 4. 根据官方文档，使用更健壮的方式来分离生成的部分
+        generated_ids = [
+            output_ids[len(input_ids) :]
+            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+        ]
+
+        # 解码生成的 token
+        response = llm_tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
+            0
+        ]
+
+        logger.info(f"LLM 生成的文本 (前100字符): {response[:100]}...")
+        return response
+
     except Exception as e:
         logger.error(f"LLM 生成文本时发生错误: {e}", exc_info=True)
-        # 可以考虑返回一个特定的错误信息或重新抛出
         raise RuntimeError(f"LLM 生成文本失败: {e}") from e

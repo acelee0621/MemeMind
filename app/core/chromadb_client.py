@@ -27,13 +27,12 @@ def get_chroma_collection():
 
     try:
         # settings.CHROMA_COLLECTION_NAME 是你在配置文件中定义的集合名称，例如 "rag_collection"
-        # 你也可以为 bce-embedding 模型指定 embedding_function，但由于我们手动生成，可以不指定        
-        # 对于 BCE，其维度是 768
+        # 你也可以为 bce-embedding 模型指定 embedding_function，但由于我们手动生成，可以不指定
         collection = chroma_client.get_or_create_collection(
             name=settings.CHROMA_COLLECTION_NAME,            
             metadata={
                 "hnsw:space": "cosine",  # 指定距离度量方法
-                "embedding_dimensions": 768,  # 显式声明嵌入维度
+                "embedding_dimensions": settings.EMBEDDING_DIMENSIONS,  # 显式声明嵌入维度, Qwen 0.6B为1024
             },
         )
         logger.info(f"已获取或创建 ChromaDB 集合: {settings.CHROMA_COLLECTION_NAME}")
