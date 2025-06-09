@@ -1,6 +1,7 @@
 import asyncio
 
 from fastapi import FastAPI, Response
+import gradio as gr
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -13,6 +14,7 @@ from app.core.llm_service import _load_llm_model
 from app.utils.migrations import run_migrations
 from app.source_doc.routes import router as source_doc_router
 from app.query.routes import router as query_router
+from app.ui.gradio_interface import rag_demo_ui
 
 
 # Run migrations on startup
@@ -67,6 +69,10 @@ app.add_middleware(
 
 app.include_router(source_doc_router)
 app.include_router(query_router)
+
+# vvv 关键的一行：将 Gradio 应用挂载到 FastAPI vvv
+# 这会在您的应用下创建一个 /gradio 路径，用于展示 UI 界面
+app = gr.mount_gradio_app(app, rag_demo_ui, path="/gradio")
 
 @app.get("/health")
 async def health_check(response: Response):
