@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
         # asyncio.to_thread(_load_embedding_model),
         # asyncio.to_thread(_load_reranker_model),
         # asyncio.to_thread(_load_llm_model)
+        #  配置足够的话，可以在开始时加载所有模型
     ]
 
     # 使用 asyncio.gather 来【并行】执行所有启动任务

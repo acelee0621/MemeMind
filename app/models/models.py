@@ -1,16 +1,14 @@
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
 import enum
 
-from sqlalchemy import ForeignKey, Integer, String, DateTime, Boolean, Text, JSON
+from sqlalchemy import ForeignKey, Integer, String, DateTime, Text, JSON
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship, DeclarativeBase
 
-
-# 基类
+# --- 基础类和混入 (Mixin) ---
 class Base(DeclarativeBase):
     pass
-
 
 class DateTimeMixin:
     created_at: Mapped[datetime] = mapped_column(
@@ -22,166 +20,67 @@ class DateTimeMixin:
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+# --- 源文档和文本块模型 ---
 
-# 用户模型 (不依赖 fastapi-users，但为未来集成做准备)
-class User(DateTimeMixin, Base):
-    __tablename__ = "user_account"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    # 你已有的字段
-    username: Mapped[str] = mapped_column(
-        String(100), index=True, unique=True, nullable=False
-    )
-    full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    # 为 fastapi-users 预留的关键字段
-    email: Mapped[Optional[str]] = mapped_column(
-        String(320), unique=True, index=True, nullable=True
-    )
-    hashed_password: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
-
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
-    # 关系映射
-    source_documents: Mapped[list["SourceDocument"]] = relationship(
-        "SourceDocument", back_populates="owner"
-    )
-    conversations: Mapped[list["Conversation"]] = relationship(
-        "Conversation", back_populates="user", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"<User(id={self.id}, username={self.username})>"
-
-
-# 源文档模型
 class SourceDocument(Base, DateTimeMixin):
     __tablename__ = "source_documents"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    owner_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_account.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    object_name: Mapped[str] = mapped_column(
-        String(512), nullable=False, unique=True, index=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)    
+    object_name: Mapped[str] = mapped_column(String(512), nullable=False, unique=True, index=True)
     bucket_name: Mapped[str] = mapped_column(String(100), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
-    size: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    # RAG 相关字段
-    status: Mapped[str] = mapped_column(
-        String(50), default="uploaded", index=True
-    )  # 例如: uploaded, processing, ready, error
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    size: Mapped[int] = mapped_column(Integer, nullable=False)    
+    status: Mapped[str] = mapped_column(String(50), default="uploaded", index=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     number_of_chunks: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
-    owner: Mapped[Optional["User"]] = relationship(
-        "User", back_populates="source_documents"
-    )
-    text_chunks: Mapped[list["TextChunk"]] = relationship(
+    text_chunks: Mapped[List["TextChunk"]] = relationship(
         "TextChunk", back_populates="source_document", cascade="all, delete-orphan"
     )
-
-    def __repr__(self):
-        return f"<SourceDocument(id={self.id}, filename='{self.original_filename}', status='{self.status}')>"
-
 
 class TextChunk(Base, DateTimeMixin):
     __tablename__ = "text_chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-
-    # 关联到源文档
     source_document_id: Mapped[int] = mapped_column(
-        ForeignKey("source_documents.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("source_documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     source_document: Mapped["SourceDocument"] = relationship(
         "SourceDocument", back_populates="text_chunks"
     )
-
-    # 文本块内容
     chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
-    sequence_in_document: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0
-    )
-    # （重要）用于关联向量数据库中的向量
-    # 向量数据库通常会返回一个或多个ID，或者你可以用这个 TextChunk 的 id 作为在向量库中存储的元数据。
-    # 向量数据库是独立的，通常会用这个 TextChunk.id 作为元数据与向量一起存储。
+    sequence_in_document: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # 其他元数据 (可选)
-    metadata_json: Mapped[Optional[dict]] = mapped_column(
-        JSON, nullable=True
-    )  # 例如：{'page': 5, 'section': 'Introduction'}
-
-    def __repr__(self):
-        return f"<TextChunk(id={self.id}, source_document_id={self.source_document_id}, len_text={len(self.chunk_text)})>"
-
-
-class Conversation(Base, DateTimeMixin):
-    __tablename__ = "conversations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("user_account.id", ondelete="CASCADE"),
-        index=True,
-        nullable=True,
-    )
-    user: Mapped[Optional["User"]] = relationship(
-        "User", back_populates="conversations"
-    )
-    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-    # 反向关系
-    messages: Mapped[list["Message"]] = relationship(
-        "Message", back_populates="conversation", cascade="all, delete-orphan"
-    )
-
-    def __repr__(self):
-        return f"<Conversation(id={self.id}, user_id={self.user_id}, title='{self.title}')>"
-
+# --- 全新设计的 Message 模型 ---
 
 class MessageAuthor(str, enum.Enum):
     USER = "user"
     BOT = "bot"
-
 
 class Message(Base, DateTimeMixin):
     __tablename__ = "messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    conversation_id: Mapped[int] = mapped_column(
-        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    # 自引用的外键，用于连接回答和问题
+    response_to_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("messages.id"), nullable=True, index=True
     )
-    conversation: Mapped["Conversation"] = relationship(
-        "Conversation", back_populates="messages"
+    
+    # 建立关系，一个'user'消息可以有多个'bot'回答（尽管通常只有一个）
+    # 一个'bot'消息只对应一个'user'提问
+    user_query: Mapped[Optional["Message"]] = relationship(
+        "Message", remote_side=[id], back_populates="bot_responses"
+    )
+    bot_responses: Mapped[List["Message"]] = relationship(
+        "Message", back_populates="user_query"
     )
 
-    author: Mapped[MessageAuthor] = mapped_column(
-        SQLAlchemyEnum(MessageAuthor), nullable=False
-    )  # 区分是用户还是AI
-
-    query_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 用户的问题
-    answer_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # AI的回答
-
-    # 存储用于生成答案的上下文信息 (非常有用)
-    # 可以是检索到的 TextChunk ID 列表
-    retrieved_chunk_ids: Mapped[Optional[list[int]]] = mapped_column(
-        JSON, nullable=True
-    )  # 存储 TextChunk.id 列表
-
-    def __repr__(self):
-        if self.author == MessageAuthor.USER:
-            return f"<Message(id={self.id}, conversation_id={self.conversation_id}, author='user', query_len={len(self.query_text or '')})>"
-        else:
-            return f"<Message(id={self.id}, conversation_id={self.conversation_id}, author='bot', answer_len={len(self.answer_text or '')})>"
+    author: Mapped[MessageAuthor] = mapped_column(SQLAlchemyEnum(MessageAuthor), nullable=False)    
+    
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 存储用于生成答案的上下文信息 (仅对 bot 消息有意义)
+    retrieved_chunk_ids: Mapped[Optional[List[int]]] = mapped_column(JSON, nullable=True)

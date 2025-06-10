@@ -4,18 +4,10 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
-from app.models.models import (
-    Base,
-    # User,
-    # SourceDocument,
-    # TextChunk,
-    # Conversation,
-    # Message,
-)
+from app.models.models import Base
 
 # 加载环境变量
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
@@ -31,7 +23,7 @@ DATABASE_URL = f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTG
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-
+config.set_main_option("sqlalchemy.url", DATABASE_URL)
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
@@ -61,7 +53,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url", DATABASE_URL)
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -86,8 +78,9 @@ async def run_async_migrations() -> None:
 
     """
 
-    connectable = create_async_engine(
-        DATABASE_URL,
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 

@@ -34,10 +34,9 @@ async def upload_document_route(
         UploadFile, File(..., title="Source Document", description="Upload a file")
     ],
     service: SourceDocumentService = Depends(get_document_service),
-    # current_user: UserResponse = Depends(get_current_user),
 ):
     try:
-        created_document = await service.add_document(file=file, current_user=None)
+        created_document = await service.add_document(file=file)
         logger.info(f"Uploaded document {created_document.id}")
         return created_document  # 返回创建的附件信息
     except Exception as e:
@@ -51,14 +50,10 @@ async def upload_document_route(
     summary="Download document",
 )
 async def download_attachment_route(
-    document_id: int,
-    service: SourceDocumentService = Depends(get_document_service),
-    # current_user: UserResponse = Depends(get_current_user),
+    document_id: int, service: SourceDocumentService = Depends(get_document_service)
 ):
     try:
-        response = await service.download_document(
-            document_id=document_id, current_user=None
-        )
+        response = await service.download_document(document_id=document_id)
         return response
     except Exception as e:
         logger.error(f"Failed to download document {document_id}: {str(e)}")
@@ -71,12 +66,10 @@ async def download_attachment_route(
     summary="Delete an document",
 )
 async def delete_attachment_route(
-    document_id: int,
-    service: SourceDocumentService = Depends(get_document_service),
-    # current_user: UserResponse = Depends(get_current_user),
+    document_id: int, service: SourceDocumentService = Depends(get_document_service)
 ):
     try:
-        await service.delete_document(document_id=document_id, current_user=None)
+        await service.delete_document(document_id=document_id)
         logger.info(f"Deleted document {document_id}")
     except Exception as e:
         logger.error(f"Failed to delete document {document_id}: {str(e)}")
@@ -91,14 +84,10 @@ async def delete_attachment_route(
 async def get_all_documents(
     params: DocumentQueryParams = Depends(),
     service: SourceDocumentService = Depends(get_document_service),
-    # current_user: UserResponse = Depends(get_current_user),
 ) -> list[SourceDocumentResponse]:
     try:
         all_documents = await service.get_documents(
-            order_by=params.order_by,
-            limit=params.limit,
-            offset=params.offset,
-            current_user=None,
+            order_by=params.order_by, limit=params.limit, offset=params.offset
         )
         logger.info(f"Retrieved {len(all_documents)} documents")
         return all_documents
@@ -118,11 +107,10 @@ async def get_document(
         bool, Query(description="If true, return pre-signed URL")
     ] = False,
     service: SourceDocumentService = Depends(get_document_service),
-    # current_user: UserResponse = Depends(get_current_user),
 ) -> Union[SourceDocumentResponse, PresignedUrlResponse]:
     if presigned:
         try:
-            response = await service.get_presigned_url(document_id, current_user=None)
+            response = await service.get_presigned_url(document_id)
             logger.info(f"Generated pre-signed URL for document {document_id}")
             return response
         except Exception as e:

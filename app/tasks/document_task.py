@@ -1,7 +1,6 @@
 import asyncio
 
 from loguru import logger
-from asgiref.sync import async_to_sync
 
 from app.core.celery_app import celery_app
 from app.tasks.utils.doc_process import _execute_document_processing_async

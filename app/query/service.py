@@ -209,7 +209,7 @@ class QueryService:
         logger.info(f"已为 LLM 准备了 {len(context_texts)} 段上下文文本。")
         return context_texts
 
-    # --- 新增方法：用于生成最终答案 ---
+    # --- 生成最终答案 ---
     async def generate_answer_from_query(
         self,
         query_text: str,
@@ -230,7 +230,7 @@ class QueryService:
             # 1. 获取上下文
             context_strings = await self.get_context_for_llm(query_text)
 
-            # 2. 【关键改动】如果找不到上下文，直接返回提示信息，不再调用 LLM
+            # 2. 如果找不到上下文，直接返回提示信息，不再调用 LLM
             if not context_strings:
                 logger.warning(f"未能为查询 '{query_text[:100]}...' 获取到上下文。")
                 answer_text = "抱歉，我们的知识库中没有找到与您问题直接相关的信息。"

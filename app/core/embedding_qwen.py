@@ -5,12 +5,12 @@ from torch import Tensor
 from loguru import logger
 from transformers import AutoTokenizer, AutoModel
 
-# --- 1. 修改模型名称和路径 ---
-# 新模型的 Hugging Face 名称
+# --- 1. 模型名称和路径 ---
+# 模型的 Hugging Face 名称
 EMBEDDING_MODEL_NAME = "Qwen/Qwen3-Embedding-0.6B"
-# 建议为新模型创建一个新的本地路径
+# 模型的本地路径
 EMBEDDING_MODEL_PATH = "app/embeddings/Qwen3-Embedding-0.6B"
-# 新模型的最大长度
+# 模型的最大长度
 QWEN_MAX_LENGTH = 8192
 
 """ 下载新模型命令
@@ -23,7 +23,7 @@ embedding_model_global = None
 device = None
 
 
-# --- 2. 添加新模型所需的 last_token_pool 函数 ---
+# --- 2. 模型所需的 last_token_pool 函数 ---
 # 这个函数来自 Qwen 官方示例，用于从模型的输出中正确地提取句向量
 def last_token_pool(last_hidden_states: Tensor, attention_mask: Tensor) -> Tensor:
     """
@@ -52,7 +52,7 @@ def _load_embedding_model():
 
             logger.info(f"从本地加载 Embedding 模型: {model_path}...")
 
-            # --- 3. 修改 Tokenizer 和模型加载方式 ---
+            # --- 3.  Tokenizer 和模型加载方式 ---
             # Qwen 模型推荐使用 'left' 作为填充侧，这对于 last_token_pool至关重要
             tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="left")
 
@@ -69,14 +69,18 @@ def _load_embedding_model():
                     ).to(device)
                     logger.info("已启用 Flash Attention 2 和 bfloat16 加速。")
                 except Exception as e:
-                    logger.warning(f"加载 Flash Attention 2 失败: {e}，将使用标准模式。")
+                    logger.warning(
+                        f"加载 Flash Attention 2 失败: {e}，将使用标准模式。"
+                    )
                     embedding_model_global = AutoModel.from_pretrained(
                         model_path, torch_dtype=torch.bfloat16
                     ).to(device)
 
             elif torch.backends.mps.is_available():
                 device = torch.device("mps")
-                logger.info("检测到 MPS (Apple Silicon GPU)，Embedding 模型将使用 MPS。")
+                logger.info(
+                    "检测到 MPS (Apple Silicon GPU)，Embedding 模型将使用 MPS。"
+                )
                 # Apple Silicon 不支持 Flash Attention，但可以使用 bfloat16
                 embedding_model_global = AutoModel.from_pretrained(
                     model_path, torch_dtype=torch.bfloat16
@@ -118,13 +122,11 @@ def get_embeddings(
     if not texts:
         return []
 
-    # --- 4. 修改输入文本的格式化方式 ---
+    # --- 4. 输入文本的格式化方式 ---
     # 根据 is_query 参数决定是否添加指令
     if is_query:
         # Qwen 的指令格式为 'Instruct: {task_description}\nQuery: {text}'
-        instructed_texts = [
-            f"Instruct: {task_description}\nQuery: {s}" for s in texts
-        ]
+        instructed_texts = [f"Instruct: {task_description}\nQuery: {s}" for s in texts]
     else:
         # 文档（documents）不需要指令
         instructed_texts = texts

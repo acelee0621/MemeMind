@@ -40,14 +40,10 @@ def _load_llm_model():
             llm_model.eval()
 
             device = next(llm_model.parameters()).device
-            logger.info(
-                f"LLM 模型 {LLM_MODEL_NAME} 加载成功，运行于设备: {device}"
-            )
+            logger.info(f"LLM 模型 {LLM_MODEL_NAME} 加载成功，运行于设备: {device}")
 
         except Exception as e:
-            logger.error(
-                f"加载 LLM 模型 {LLM_MODEL_NAME} 失败: {e}", exc_info=True
-            )
+            logger.error(f"加载 LLM 模型 {LLM_MODEL_NAME} 失败: {e}", exc_info=True)
             raise RuntimeError(f"无法加载 LLM 模型: {LLM_MODEL_NAME}") from e
 
 
@@ -62,7 +58,7 @@ def generate_text_from_llm(
     使用加载的 Qwen2.5 模型根据给定的提示生成文本。
     """
     _load_llm_model()
-    
+
     if llm_model is None or llm_tokenizer is None:
         raise RuntimeError("LLM 模型实例未成功加载，无法生成文本。")
 

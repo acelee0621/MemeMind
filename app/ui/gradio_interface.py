@@ -1,3 +1,4 @@
+import time
 import gradio as gr
 import httpx
 from loguru import logger
@@ -15,6 +16,7 @@ async def call_ask_api(query_text: str):
     """【问答模块】的桥梁函数"""
     if not query_text or not query_text.strip():
         return "请输入有效的问题后再提交。"
+    t0 = time.monotonic()  # 记录开始时间
     api_url = f"{FASTAPI_BASE_URL}/query/ask"
     payload = {"query": query_text}
     logger.info(f"Gradio 界面正在调用 API: {api_url}，负载: {payload}")
@@ -30,7 +32,10 @@ async def call_ask_api(query_text: str):
                 formatted_output += "--- \n### 参考资料:\n"
                 for i, text_chunk in enumerate(source_texts, 1):
                     formatted_output += f"**[{i}]** {text_chunk or '无内容'}\n\n"
-            return formatted_output
+            t1 = time.monotonic()  # 记录结束时间
+            duration_str = f"处理完成，总耗时: {t1 - t0:.2f} 秒"
+            logger.info(duration_str)
+            return formatted_output, duration_str
     except Exception as e:
         logger.error(f"调用问答 API 时发生错误: {e}", exc_info=True)
         return f"处理问答请求时出错: {e}"
@@ -125,6 +130,8 @@ async def retrieve_chunks_bridge(query: str, top_k: int):
         gr.Warning("请输入检索关键词！")
         return None  # 返回 None 以保持输出区域不变
 
+    t0 = time.monotonic()  # 记录开始时间
+
     api_url = f"{FASTAPI_BASE_URL}/query/retrieve-chunks"
     payload = {"query": query, "top_k": int(top_k)}
     logger.info(f"Gradio 正在调用检索 API: {api_url}，负载: {payload}")
@@ -152,7 +159,10 @@ async def retrieve_chunks_bridge(query: str, top_k: int):
                 },
                 inplace=True,
             )
-            return df_display
+            t1 = time.monotonic()  #  记录结束时间
+            duration_str = f"检索完成，总耗时: {t1 - t0:.2f} 秒"
+            logger.info(duration_str)
+            return df_display, duration_str
 
     except Exception as e:
         error_message = f"检索文本块时出错: {e}"
@@ -180,6 +190,7 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
                     scale=4,
                 )
                 ask_submit_button = gr.Button("提交问题", variant="primary", scale=1)
+            ask_timer_text = gr.Textbox(label="处理耗时", interactive=False)
             with gr.Row():
                 answer_output = gr.Markdown(label="生成的回答")
 
@@ -217,9 +228,13 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
                 with gr.Column(scale=1):
                     retrieve_top_k_input = gr.Number(label="返回数量 (Top K)", value=5)
                     retrieve_button = gr.Button("执行检索", variant="primary")
+            retrieve_timer_text = gr.Textbox(label="处理耗时", interactive=False)
             with gr.Row():
                 retrieved_chunks_df = gr.DataFrame(
-                    label="检索到的文本块", interactive=False
+                    label="检索到的文本块",
+                    interactive=False,
+                    wrap=True,
+                    column_widths=["5%", "8%", "80%", "7%"],
                 )
 
     # ===================================================================
@@ -228,7 +243,9 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
 
     # 问答选项卡的事件
     ask_submit_button.click(
-        fn=call_ask_api, inputs=[question_input], outputs=[answer_output]
+        fn=call_ask_api,
+        inputs=[question_input],
+        outputs=[answer_output, ask_timer_text],
     )
 
     # 文档管理选项卡的事件
@@ -245,5 +262,5 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
     retrieve_button.click(
         fn=retrieve_chunks_bridge,
         inputs=[retrieve_query_input, retrieve_top_k_input],
-        outputs=[retrieved_chunks_df],
+        outputs=[retrieved_chunks_df, retrieve_timer_text],
     )

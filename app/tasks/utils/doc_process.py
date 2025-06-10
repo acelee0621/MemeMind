@@ -66,7 +66,7 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
             # 第1步：获取文档元数据
             # ==================================================================
             document_response = await source_doc_service.get_document(
-                document_id=document_id, current_user=None
+                document_id=document_id
             )
             if not document_response:
                 logger.error(
@@ -83,7 +83,7 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
             # 第2步：更新文档状态为 "processing"
             # ==================================================================
             await source_doc_service.update_document_processing_info(
-                document_id=document_response.id, current_user=None, status="processing"
+                document_id=document_response.id, status="processing"
             )
             logger.info(
                 f"{task_id_for_log} (Async Logic) 文档 {document_response.id} 状态更新为 'processing'"
@@ -110,7 +110,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                 )
                 await source_doc_service.update_document_processing_info(
                     document_id=document_response.id,
-                    current_user=None,
                     status="error",
                     error_message=f"S3下载失败: {str(s3_error)[:255]}",
                 )
@@ -129,7 +128,7 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                     parse_and_clean_document,
                     file_content_bytes,
                     document_response.original_filename,
-                    document_response.content_type
+                    document_response.content_type,
                 )
 
                 if not raw_text.strip():
@@ -236,7 +235,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                     )
                     await source_doc_service.update_document_processing_info(
                         document_id=document_response.id,
-                        current_user=None,
                         status="error",
                         error_message=f"存储文本块失败: {str(db_chunk_error)[:255]}",
                     )
@@ -277,7 +275,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                     )
                     await source_doc_service.update_document_processing_info(
                         document_id=document_response.id,
-                        current_user=None,
                         status="error",
                         error_message=f"向量化失败: {str(embed_error)[:255]}",
                         number_of_chunks=number_of_chunks_created,  # 已创建的块数量还是记录一下
@@ -329,7 +326,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                         )
                         await source_doc_service.update_document_processing_info(
                             document_id=document_response.id,
-                            current_user=None,
                             status="error",
                             error_message=f"向量存储失败: {str(chroma_error)[:255]}",
                             number_of_chunks=number_of_chunks_created,
@@ -345,7 +341,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
             # ==================================================================
             await source_doc_service.update_document_processing_info(
                 document_id=document_response.id,
-                current_user=None,
                 status="ready",
                 set_processed_now=True,
                 number_of_chunks=number_of_chunks_created,
@@ -374,7 +369,6 @@ async def _execute_document_processing_async(document_id: int, task_id_for_log: 
                     )  # 重新实例化 service
                     await error_service.update_document_processing_info(
                         document_id=document_id,
-                        current_user=None,
                         status="error",
                         error_message=f"Celery任务异步逻辑最终错误: {str(e)[:250]}",  # 确保不超过数据库字段长度
                     )

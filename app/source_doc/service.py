@@ -1,4 +1,5 @@
 import uuid
+import mimetypes
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
@@ -13,7 +14,6 @@ from app.core.celery_app import celery_app
 from app.core.exceptions import NotFoundException, ForbiddenException
 from app.source_doc.repository import SourceDocumentRepository
 from app.schemas.schemas import (
-    UserResponse,    
     SourceDocumentCreate,
     SourceDocumentUpdate,
     SourceDocumentResponse,
@@ -27,12 +27,24 @@ class SourceDocumentService:
 
         self.repository = repository
 
-    async def add_document(
-        self, file: UploadFile, current_user: UserResponse | None
-    ) -> SourceDocumentResponse:
-        # ===== 1. 文件元数据处理,从 UploadFile 获取文件元数据 =====
+    async def add_document(self, file: UploadFile) -> SourceDocumentResponse:
+        # ===== 1. 文件元数据处理,从 UploadFile 获取并校准文件元数据 =====
         original_filename = file.filename or f"unnamed_{uuid.uuid4()}"
-        content_type = file.content_type or "application/octet-stream"
+        #    --- 校准 content_type ---
+        client_provided_content_type = file.content_type
+        #    根据文件名后缀猜测正确的MIME类型
+        guessed_type, _ = mimetypes.guess_type(original_filename)
+        #    决定最终使用的 content_type，建立信任链：
+        #    我们自己的猜测 > 客户端的提供 > 通用默认值
+        final_content_type = (
+            guessed_type or client_provided_content_type or "application/octet-stream"
+        )
+
+        logger.info(
+            f"文件上传: {original_filename}, "
+            f"客户端提供类型: {client_provided_content_type}, "
+            f"修正后类型: {final_content_type}"
+        )
 
         try:
             file.file.seek(0, 2)  # 移动到文件末尾以获取大小
@@ -55,7 +67,7 @@ class SourceDocumentService:
                 Fileobj=file.file,
                 Bucket=settings.MINIO_BUCKET,
                 Key=object_name,
-                ExtraArgs={"ContentType": content_type},
+                ExtraArgs={"ContentType": final_content_type},
             )
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "UnknownError")
@@ -83,12 +95,12 @@ class SourceDocumentService:
             object_name=object_name,
             bucket_name=settings.MINIO_BUCKET,
             original_filename=original_filename,
-            content_type=content_type,
+            content_type=final_content_type,
             size=size,
         )
         try:
-            new_document = await self.repository.create(document_data, current_user)
-            result = SourceDocumentResponse.model_validate(new_document)            
+            new_document = await self.repository.create(document_data)
+            result = SourceDocumentResponse.model_validate(new_document)
             celery_app.send_task(
                 "app.tasks.document_task.process_document_task",
                 args=[new_document.id],
@@ -109,10 +121,8 @@ class SourceDocumentService:
                 status_code=500, detail=f"Failed to save document: {str(e)}"
             )
 
-    async def get_document(
-        self, document_id: int, current_user: UserResponse | None
-    ) -> SourceDocumentResponse:
-        document = await self.repository.get_by_id(document_id, current_user)
+    async def get_document(self, document_id: int) -> SourceDocumentResponse:
+        document = await self.repository.get_by_id(document_id)
         return SourceDocumentResponse.model_validate(document)
 
     async def get_documents(
@@ -120,26 +130,18 @@ class SourceDocumentService:
         order_by: str | None,
         limit: int,
         offset: int,
-        current_user: UserResponse | None,
     ) -> list[SourceDocumentResponse]:
         documents = await self.repository.get_all(
-            order_by=order_by,
-            limit=limit,
-            offset=offset,
-            current_user=current_user,
+            order_by=order_by, limit=limit, offset=offset
         )
         return [
             SourceDocumentResponse.model_validate(document) for document in documents
         ]
 
-    async def delete_document(
-        self, document_id: int, current_user: UserResponse | None
-    ) -> None:
+    async def delete_document(self, document_id: int) -> None:
         # 先删除数据库记录
-        document = await self.get_document(
-            document_id=document_id, current_user=current_user
-        )
-        await self.repository.delete(document.id, current_user)
+        document = await self.get_document(document_id=document_id)
+        await self.repository.delete(document.id)
         logger.info(f"Deleted document record {document_id} from database")
 
         # 再删除文件
@@ -158,10 +160,8 @@ class SourceDocumentService:
                 detail=f"Unexpected error deleting document {document_id}: {str(e)}",
             )
 
-    async def download_document(self, document_id: int, current_user: UserResponse | None):
-        document = await self.get_document(
-            document_id=document_id, current_user=current_user
-        )
+    async def download_document(self, document_id: int):
+        document = await self.get_document(document_id=document_id)
 
         try:
             s3_response = s3_client.get_object(
@@ -196,12 +196,8 @@ class SourceDocumentService:
             )
             raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
-    async def get_presigned_url(
-        self, document_id: int, current_user: UserResponse | None
-    ) -> PresignedUrlResponse:
-        document = await self.get_document(
-            document_id=document_id, current_user=current_user
-        )
+    async def get_presigned_url(self, document_id: int) -> PresignedUrlResponse:
+        document = await self.get_document(document_id=document_id)
         expires_in = 60 * 60 * 24  # 24小时
         try:
             presigned_url = s3_client.generate_presigned_url(
@@ -240,11 +236,10 @@ class SourceDocumentService:
     async def update_document_processing_info(
         self,
         document_id: int,
-        current_user: dict | None,
         status: str | None = None,
         processed_at: datetime | None = None,
         number_of_chunks: int | None = None,
-        error_message: str | None = None, 
+        error_message: str | None = None,
         set_processed_now: bool = False,  # 便捷标志，用于将 processed_at 设置为当前时间
     ) -> SourceDocumentResponse:
         # 确定 processed_at 的值
@@ -261,7 +256,7 @@ class SourceDocumentService:
 
         try:
             updated_document = await self.repository.update(
-                data=update_payload, document_id=document_id, current_user=current_user
+                data=update_payload, document_id=document_id
             )
             logger.info(f"成功更新文档 ID: {document_id} 的处理信息")
             return SourceDocumentResponse.model_validate(updated_document)
