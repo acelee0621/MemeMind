@@ -18,6 +18,7 @@ dependencies = [
     "langchain>=0.3.25",
     "loguru>=0.7.3",
     "lxml>=5.4.0",
+    "pandas>=2.3.0",
     "pydantic-settings>=2.9.1",
     "python-docx>=1.1.2",
     "redis>=6.1.0",
