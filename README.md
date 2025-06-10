@@ -34,7 +34,7 @@
 | Document Storage | MinIO                          |
 | Document Parsing | unstructured                   |
 | Task Queue       | Celery, RabbitMQ               |
-| Dependency Mgmt  | Poetry/uv                      |
+| Dependency Mgmt  | uv                             |
 | UI               | Gradio                         |
 
 ---
@@ -54,14 +54,13 @@ It’s recommended to use Python 3.10+ and Poetry (or uv) for dependency managem
 
 ```bash
 uv venv
-uv pip install -r requirements.txt  # or
-poetry install
+uv sync
 ```
 
 ### 3️⃣ Start the FastAPI server
 
 ```bash
-uvicorn app.main:app --reload
+uv run fastapi dev
 ```
 
 Once started, visit `http://localhost:8000/docs` for the interactive API docs or launch the Gradio UI.

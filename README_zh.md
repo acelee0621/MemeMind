@@ -32,7 +32,7 @@
 | 文档存储 | MinIO                         |
 | 文档解析 | unstructured                  |
 | 任务队列 | Celery、RabbitMQ               |
-| 依赖管理 | Poetry/uv                     |
+| 依赖管理 | uv                           |
 | 界面   | Gradio                        |
 
 ---
@@ -52,15 +52,13 @@ cd MemeMind
 
 ```bash
 uv venv
-uv pip install -r requirements.txt  # 如果使用uv
-# 或者
-poetry install
+uv sync  # 如果使用uv
 ```
 
 ### 3️⃣ 启动服务
 
 ```bash
-uvicorn app.main:app --reload
+uv run fastapi dev
 ```
 
 启动后访问 `http://localhost:8000/docs` 查看API文档，或访问 Gradio 界面。
