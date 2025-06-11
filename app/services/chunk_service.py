@@ -31,6 +31,11 @@ class TextChunkService:
     ) -> list[TextChunkResponse]:
         chunks = await self.repository.get_by_document_id(document_id, limit, offset)
         return [TextChunkResponse.model_validate(chunk) for chunk in chunks]
+    
+    async def get_chunk_ids_by_document_id(self, document_id: int) -> list[int]:
+        """根据文档ID获取所有文本块的ID列表"""
+        chunks = await self.repository.get_by_document_id(document_id)
+        return [chunk.id for chunk in chunks]
 
     async def delete_all_chunks_for_document(self, document_id: int) -> int:
         deleted_count = await self.repository.delete_chunks_by_document_id(document_id)

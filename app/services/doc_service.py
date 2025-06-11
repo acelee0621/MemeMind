@@ -19,11 +19,14 @@ from app.schemas.schemas import (
     SourceDocumentResponse,
 )
 from app.repository.doc_repository import SourceDocumentRepository
+from app.services.chunk_service import TextChunkService
+from app.chains.vector_store import get_chroma_vector_store
 
 
 class SourceDocumentService:
-    def __init__(self, repository: SourceDocumentRepository):
-        self.repository = repository
+    def __init__(self, doc_repository: SourceDocumentRepository, chunk_service: TextChunkService):
+        self.repository = doc_repository
+        self.chunk_service = chunk_service
 
     async def add_document(
         self, file_content: bytes, filename: str, content_type: str
@@ -112,32 +115,32 @@ class SourceDocumentService:
         return [SourceDocumentResponse.model_validate(doc) for doc in documents]
 
     async def delete_document(self, document_id: int) -> None:
-        """从数据库和本地文件系统删除一个文档。"""
-        logger.info(f"开始执行删除文档流程，ID: {document_id}")
+        """
+        从数据库、向量库和本地文件系统完整地删除一个文档。
+        """
+        logger.info(f"开始执行删除文档的完整流程，ID: {document_id}")
 
-        # 1. 先从数据库获取文档信息，确保它存在
-        document = await self.repository.get_by_id(document_id)
+        document = await self.repository.get_by_id(document_id)        
+        
+        # 为了从向量库删除，我们还是需要先获取ID
+        chunk_ids_to_delete = await self.chunk_service.get_chunk_ids_by_document_id(document_id)
+        if chunk_ids_to_delete:
+            logger.info(f"文档 {document_id} 关联了 {len(chunk_ids_to_delete)} 个向量，准备从 ChromaDB 中删除。")
+            try:
+                vector_store = get_chroma_vector_store()
+                vector_store.delete(ids=[str(cid) for cid in chunk_ids_to_delete])
+                logger.success(f"已成功从 ChromaDB 中删除 {len(chunk_ids_to_delete)} 个关联向量。")
+            except Exception as e:
+                logger.error(f"从 ChromaDB 删除向量时发生错误: {e}。")
 
-        # 2. 删除物理文件
-        if document.storage_type == StorageType.LOCAL:
-            local_file_path = document.file_path
-            if os.path.exists(local_file_path):
-                try:
-                    os.remove(local_file_path)
-                    logger.info(f"成功删除本地物理文件: '{local_file_path}'")
-                except OSError as e:
-                    logger.error(
-                        f"删除本地文件 '{local_file_path}' 失败: {e}。将继续删除数据库记录。"
-                    )
-            else:
-                logger.warning(f"尝试删除但未在本地找到文件: '{local_file_path}'")
-        else:
-            logger.warning(
-                f"文档 {document.id} 的存储类型为 '{document.storage_type}'，跳过本地文件删除。"
-            )
-
-        # 3. 删除数据库记录 (无论物理文件是否删除成功，都执行此步)
+        # 删除物理文件
+        if document.storage_type == StorageType.LOCAL and os.path.exists(document.file_path):
+            os.remove(document.file_path)
+            logger.info(f"成功删除本地物理文件: '{document.file_path}'")
+        
+        # 从 PostgreSQL 中删除文档记录 (这将级联删除所有文本块)
         await self.repository.delete(document_id)
+        logger.success(f"已成功从 PostgreSQL 中删除文档记录 ID: {document_id} 及其关联的文本块。")
 
     async def download_document(self, document_id: int) -> FileResponse:
         """提供本地存储文档的直接下载。"""

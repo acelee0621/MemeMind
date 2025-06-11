@@ -39,8 +39,8 @@ class Settings(BaseSettings):
 
     # Reranker 相关配置
     RERANKER_MODEL_PATH: str = "local_models/reranker/Qwen3-Reranker-0.6B"
-    INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
-    FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
+    INITIAL_RETRIEVAL_TOP_K: int = 100  # 第一阶段向量召回的数量
+    FINAL_CONTEXT_TOP_N: int = 20  # Rerank 后最终选取的数量
     RERANKER_INSTRUCTION: str = "给定一个网页搜索查询，检索回答该查询的相关段落"
 
     # LLM 相关配置

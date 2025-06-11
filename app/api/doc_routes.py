@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.services.doc_service import SourceDocumentService
 from app.repository.doc_repository import SourceDocumentRepository
+from app.services.chunk_service import TextChunkService
+from app.repository.chunk_repository import TextChunkRepository
 from app.schemas.schemas import SourceDocumentResponse
 from app.schemas.param_schemas import DocumentQueryParams
 from app.core.exceptions import NotFoundException
@@ -17,8 +19,15 @@ router = APIRouter(prefix="/documents", tags=["Documents"])
 
 
 def get_document_service(session: AsyncSession = Depends(get_db)) -> SourceDocumentService:
-    repository = SourceDocumentRepository(session)
-    return SourceDocumentService(repository)
+    """
+    依赖注入函数，构建并注入所有需要的服务和仓库。
+    """
+    doc_repo = SourceDocumentRepository(session)
+    chunk_repo = TextChunkRepository(session)
+    # 先创建底层的 chunk_service
+    chunk_service = TextChunkService(chunk_repo)
+    # 再创建依赖 chunk_service 的 doc_service
+    return SourceDocumentService(doc_repository=doc_repo, chunk_service=chunk_service)
 
 @router.post(
     "",
