@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import aiofiles
 from loguru import logger
-from fastapi import UploadFile, HTTPException
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
@@ -18,19 +18,21 @@ from app.schemas.schemas import (
     SourceDocumentUpdate,
     SourceDocumentResponse,
 )
-from app.source_doc.repository import SourceDocumentRepository
+from app.repository.doc_repository import SourceDocumentRepository
 
 
 class SourceDocumentService:
     def __init__(self, repository: SourceDocumentRepository):
         self.repository = repository
 
-    async def add_document(self, file: UploadFile) -> SourceDocumentResponse:
+    async def add_document(
+        self, file_content: bytes, filename: str, content_type: str
+    ) -> SourceDocumentResponse:
         """处理文档上传，将其保存到本地文件系统，并在数据库中创建记录。"""
 
         # ===== 1. 文件元数据处理 =====
-        original_filename = file.filename or f"unnamed_{uuid.uuid4()}"
-        client_provided_content_type = file.content_type
+        original_filename = filename or f"unnamed_{uuid.uuid4()}"
+        client_provided_content_type = content_type
         guessed_type, _ = mimetypes.guess_type(original_filename)
         final_content_type = (
             guessed_type or client_provided_content_type or "application/octet-stream"
@@ -41,9 +43,7 @@ class SourceDocumentService:
             f"最终类型: {final_content_type}"
         )
 
-        file_content = await file.read()
         size = len(file_content)
-        await file.close()
 
         # ===== 2. 保存文件到本地 =====
         storage_path = settings.LOCAL_STORAGE_PATH
@@ -178,7 +178,7 @@ class SourceDocumentService:
         error_message: str | None = None,
         set_processed_now: bool = False,
     ) -> SourceDocumentResponse:
-        """更新文档的处理状态信息。"""        
+        """更新文档的处理状态信息。"""
         actual_processed_at = processed_at
         if set_processed_now:
             actual_processed_at = datetime.now(timezone.utc)

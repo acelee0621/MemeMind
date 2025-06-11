@@ -10,13 +10,14 @@ from app.core.database import (
     initialize_database_for_fastapi,
     close_database_for_fastapi,
 )
-from app.core.embedding_qwen import _load_embedding_model
-from app.core.reranker_qwen import _load_reranker_model
-from app.core.llm_service import _load_llm_model
+
 from app.utils.migrations import run_migrations
-from app.source_doc.routes import router as source_doc_router
-from app.query.routes import router as query_router
+from app.api import doc_routes, query_routes
 from app.ui.gradio_interface import rag_demo_ui
+# 导入我们所有的模型加载器
+from app.chains.embedding_loader import get_qwen_embeddings
+from app.chains.reranker_loader import get_qwen_reranker
+from app.chains.llm_loader import get_qwen_llm
 
 
 # Run migrations on startup
@@ -32,10 +33,9 @@ async def lifespan(app: FastAPI):
     # 这样可以防止它们阻塞主线程
     startup_tasks = [
         asyncio.to_thread(initialize_database_for_fastapi),
-        # asyncio.to_thread(_load_embedding_model),
-        # asyncio.to_thread(_load_reranker_model),
-        # asyncio.to_thread(_load_llm_model)
-        #  配置足够的话，可以在开始时加载所有模型
+        asyncio.to_thread(get_qwen_embeddings),
+        asyncio.to_thread(get_qwen_reranker),
+        asyncio.to_thread(get_qwen_llm),
     ]
 
     # 使用 asyncio.gather 来【并行】执行所有启动任务
@@ -64,8 +64,8 @@ app.add_middleware(
 )
 
 
-app.include_router(source_doc_router)
-app.include_router(query_router)
+app.include_router(doc_routes.router)
+app.include_router(query_routes)
 
 # vvv 将 Gradio 应用挂载到 FastAPI vvv
 # 这会在应用下创建一个 /gradio 路径，用于展示 UI 界面
