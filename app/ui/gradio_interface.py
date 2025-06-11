@@ -17,7 +17,7 @@ async def stream_chat_gradio(query: str, history: list[dict]):
     if not query or not query.strip():
         gr.Warning("请输入有效的问题！")
         return
-    
+
     api_url = f"{FASTAPI_BASE_URL}/query/ask/stream"
     payload = {"query": query}
     history.append({"role": "user", "content": query})
@@ -45,17 +45,27 @@ async def get_all_docs_gradio():
             response = await client.get(api_url, params={"limit": 100, "offset": 0})
             response.raise_for_status()
             docs_list = response.json()
-        
+
         if not docs_list:
             return pd.DataFrame(columns=["ID", "文件名", "状态", "块数量", "上传时间"])
-        
+
         df = pd.DataFrame(docs_list)
-        df_display = df[["id", "original_filename", "status", "number_of_chunks", "created_at"]].copy()
-        df_display['created_at'] = pd.to_datetime(df_display['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
-        df_display.rename(columns={
-            "id": "ID", "original_filename": "文件名", "status": "处理状态",
-            "number_of_chunks": "块数量", "created_at": "上传时间"
-        }, inplace=True)
+        df_display = df[
+            ["id", "original_filename", "status", "number_of_chunks", "created_at"]
+        ].copy()
+        df_display["created_at"] = pd.to_datetime(df_display["created_at"]).dt.strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        df_display.rename(
+            columns={
+                "id": "ID",
+                "original_filename": "文件名",
+                "status": "处理状态",
+                "number_of_chunks": "块数量",
+                "created_at": "上传时间",
+            },
+            inplace=True,
+        )
         return df_display
     except Exception as e:
         gr.Error(f"无法加载文档列表: {e}")
@@ -64,14 +74,20 @@ async def get_all_docs_gradio():
 
 async def upload_doc_gradio(file_obj: gr.File):
     """【文档管理】通过 httpx 上传文件"""
-    if file_obj is None: 
+    if file_obj is None:
         return "未选择文件"
-    
+
     api_url = f"{FASTAPI_BASE_URL}/documents"
-    original_filename = getattr(file_obj, 'orig_name', os.path.basename(file_obj.name))
-    
-    files = {'file': (original_filename, open(file_obj.name, 'rb'), 'application/octet-stream')}
-    
+    original_filename = getattr(file_obj, "orig_name", os.path.basename(file_obj.name))
+
+    files = {
+        "file": (
+            original_filename,
+            open(file_obj.name, "rb"),
+            "application/octet-stream",
+        )
+    }
+
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(api_url, files=files)
@@ -89,10 +105,10 @@ async def delete_doc_gradio(doc_id_str: str):
     """【文档管理】通过 httpx 删除指定ID文档"""
     if not doc_id_str or not doc_id_str.strip().isdigit():
         return "请输入有效的纯数字文档ID"
-    
+
     doc_id = int(doc_id_str)
     api_url = f"{FASTAPI_BASE_URL}/documents/{doc_id}"
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.delete(api_url)
@@ -104,6 +120,7 @@ async def delete_doc_gradio(doc_id_str: str):
         error_message = f"删除失败: {e}"
         gr.Error(error_message)
         return error_message
+
 
 async def retrieve_chunks_gradio(query: str, top_k: int):
     """【检索测试】通过 httpx 调用 API"""
@@ -127,11 +144,12 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
         data = [
             {
                 "相关度分数": f"{doc['metadata'].get('relevance_score', 0):.4f}",
-                "文本块内容": doc['page_content'],
-                "来源文件名": doc['metadata'].get('original_filename', '未知来源'),
-            } for doc in retrieved_docs
+                "文本块内容": doc["page_content"],
+                "来源文件名": doc["metadata"].get("original_filename", "未知来源"),
+            }
+            for doc in retrieved_docs
         ]
-        
+
         df = pd.DataFrame(data)
         t1 = time.monotonic()
         duration_str = f"检索完成，总耗时: {t1 - t0:.2f} 秒"

@@ -3,7 +3,6 @@ from loguru import logger
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_unstructured import UnstructuredLoader
 from langchain_community.vectorstores.utils import filter_complex_metadata
-from langchain_core.documents import Document
 
 from app.core.config import settings
 from app.core.database import create_engine_and_session_for_celery
@@ -80,22 +79,6 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
             logger.info(
                 f"{task_id_for_log} 正在为 {number_of_chunks} 个文本块构建干净的元数据..."
             )
-            final_docs_for_storage = []
-            for i, doc in enumerate(split_docs):
-                # 为每个块创建一个干净、可控的元数据字典
-                final_metadata = {
-                    "source": doc_record.file_path,
-                    "original_filename": doc_record.original_filename,  # 明确注入原始文件名
-                    "sequence": i,
-                }
-                # 从 unstructured 的结果中安全地提取页码（如果存在）
-                if "page" in doc.metadata:
-                    final_metadata["page"] = doc.metadata["page"]
-
-                new_doc = Document(
-                    page_content=doc.page_content, metadata=final_metadata
-                )
-                final_docs_for_storage.append(new_doc)
 
             # 3. Store to SQL
             logger.info(f"{task_id_for_log} [Store SQL] 正在将文本块存入 PostgreSQL...")
@@ -109,10 +92,8 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
                 for i, doc in enumerate(split_docs)
             ]
 
-            created_chunk_orm_objects = (
-                await text_chunk_service.add_chunks_in_bulk(
-                    chunks_data=chunks_to_create
-                )
+            created_chunk_orm_objects = await text_chunk_service.add_chunks_in_bulk(
+                chunks_data=chunks_to_create
             )
 
             logger.success(
@@ -136,7 +117,7 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
             logger.success(
                 f"{task_id_for_log} [Embed & Store Vector] {number_of_chunks} 个文本块已成功嵌入并存入 ChromaDB。"
             )
-        
+
             # 5. 结束阶段
             await source_doc_service.update_document_processing_info(
                 document_id,

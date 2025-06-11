@@ -24,7 +24,11 @@ from app.chains.vector_store import get_chroma_vector_store
 
 
 class SourceDocumentService:
-    def __init__(self, doc_repository: SourceDocumentRepository, chunk_service: TextChunkService):
+    def __init__(
+        self,
+        doc_repository: SourceDocumentRepository,
+        chunk_service: TextChunkService | None = None,
+    ):
         self.repository = doc_repository
         self.chunk_service = chunk_service
 
@@ -120,27 +124,37 @@ class SourceDocumentService:
         """
         logger.info(f"开始执行删除文档的完整流程，ID: {document_id}")
 
-        document = await self.repository.get_by_id(document_id)        
-        
+        document = await self.repository.get_by_id(document_id)
+
         # 为了从向量库删除，我们还是需要先获取ID
-        chunk_ids_to_delete = await self.chunk_service.get_chunk_ids_by_document_id(document_id)
+        chunk_ids_to_delete = await self.chunk_service.get_chunk_ids_by_document_id(
+            document_id
+        )
         if chunk_ids_to_delete:
-            logger.info(f"文档 {document_id} 关联了 {len(chunk_ids_to_delete)} 个向量，准备从 ChromaDB 中删除。")
+            logger.info(
+                f"文档 {document_id} 关联了 {len(chunk_ids_to_delete)} 个向量，准备从 ChromaDB 中删除。"
+            )
             try:
                 vector_store = get_chroma_vector_store()
                 vector_store.delete(ids=[str(cid) for cid in chunk_ids_to_delete])
-                logger.success(f"已成功从 ChromaDB 中删除 {len(chunk_ids_to_delete)} 个关联向量。")
+                logger.success(
+                    f"已成功从 ChromaDB 中删除 {len(chunk_ids_to_delete)} 个关联向量。"
+                )
             except Exception as e:
                 logger.error(f"从 ChromaDB 删除向量时发生错误: {e}。")
 
         # 删除物理文件
-        if document.storage_type == StorageType.LOCAL and os.path.exists(document.file_path):
+        if document.storage_type == StorageType.LOCAL and os.path.exists(
+            document.file_path
+        ):
             os.remove(document.file_path)
             logger.info(f"成功删除本地物理文件: '{document.file_path}'")
-        
+
         # 从 PostgreSQL 中删除文档记录 (这将级联删除所有文本块)
         await self.repository.delete(document_id)
-        logger.success(f"已成功从 PostgreSQL 中删除文档记录 ID: {document_id} 及其关联的文本块。")
+        logger.success(
+            f"已成功从 PostgreSQL 中删除文档记录 ID: {document_id} 及其关联的文本块。"
+        )
 
     async def download_document(self, document_id: int) -> FileResponse:
         """提供本地存储文档的直接下载。"""

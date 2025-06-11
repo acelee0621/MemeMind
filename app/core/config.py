@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     app_name: str = "MemeMind"
-    BASE_URL: str = "http://localhost:8000"    
+    BASE_URL: str = "http://localhost:8000"
     DEBUG: bool = False
 
     # PostgreSQL 配置
@@ -23,11 +23,11 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost:6379"
 
     # 上传文件路径配置
-    LOCAL_STORAGE_PATH: str = "source_documents/" 
+    LOCAL_STORAGE_PATH: str = "source_documents/"
 
     # ChromaDB 配置 ...
     CHROMA_HOST: str = "localhost"
-    CHROMA_PORT: int = 5500 
+    CHROMA_PORT: int = 5500
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 
     # Embedding 模型相关
@@ -39,13 +39,13 @@ class Settings(BaseSettings):
 
     # Reranker 相关配置
     RERANKER_MODEL_PATH: str = "local_models/reranker/Qwen3-Reranker-0.6B"
-    INITIAL_RETRIEVAL_TOP_K: int = 100  # 第一阶段向量召回的数量
-    FINAL_CONTEXT_TOP_N: int = 20  # Rerank 后最终选取的数量
+    INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
+    FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
     RERANKER_INSTRUCTION: str = "给定一个网页搜索查询，检索回答该查询的相关段落"
 
     # LLM 相关配置
     LLM_MODEL_PATH: str = "local_models/llm/Qwen2.5-1.5B-Instruct"
-    LLM_SYSTEM_PROMPT: str = "You are a helpful assistant." 
+    LLM_SYSTEM_PROMPT: str = "You are a helpful assistant."
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
