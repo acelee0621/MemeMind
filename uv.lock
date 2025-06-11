@@ -1226,8 +1226,22 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-chroma"
+version = "0.2.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "chromadb" },
+    { name = "langchain-core" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4c/2c/7e81227945e6bb0fe09b1a858dbcdcd9cef7e9ffcf4a1b5974c8d51bf9bc/langchain_chroma-0.2.4.tar.gz", hash = "sha256:d021ebf743969f6c2887b3878e829d1814d770e2bbf8e22df7d8cce15efed0d7", size = 15769, upload-time = "2025-05-15T20:01:40.451Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/61/70/384bcdcaac7cb74e239a8411a9bd16079c7e0d9174391d66c635c45514f4/langchain_chroma-0.2.4-py3-none-any.whl", hash = "sha256:8bd5316ab415ff7c6ac911d2069926a54777aa4a04f69239a422415c02d1feeb", size = 11285, upload-time = "2025-05-15T20:01:39.185Z" },
+]
+
+[[package]]
 name = "langchain-core"
-version = "0.3.64"
+version = "0.3.65"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -1238,9 +1252,23 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/58/40/89a80157f495d4adc9e5e770171806e3231600647f4ca0e89bdf743702ff/langchain_core-0.3.64.tar.gz", hash = "sha256:71b51bf77003eb57e74b8fa2a84ac380e24aa7357f173b51645c5834b9fc0d62", size = 558483, upload-time = "2025-06-05T21:27:10.817Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/8a/d08c83195d1ef26c42728412ab92ab08211893906b283abce65775e21327/langchain_core-0.3.65.tar.gz", hash = "sha256:54b5e0c8d9bb405415c3211da508ef9cfe0acbe5b490d1b4a15664408ee82d9b", size = 558557, upload-time = "2025-06-10T20:08:28.94Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/43/94b486eeb778443887e4eb76326e704ee0c6244f5fab6a46686e09968e9a/langchain_core-0.3.64-py3-none-any.whl", hash = "sha256:e844c425329d450cb3010001d86b61fd59a6a17691641109bae39322c85e27dd", size = 438113, upload-time = "2025-06-05T21:27:07.981Z" },
+    { url = "https://files.pythonhosted.org/packages/54/f0/31db18b7b8213266aed926ce89b5bdd84ccde7ee2edf4cab14e3dd2bfcf1/langchain_core-0.3.65-py3-none-any.whl", hash = "sha256:80e8faf6e9f331f8ef728f3fe793549f1d3fb244fcf9e1bdcecab6a6f4669394", size = 438052, upload-time = "2025-06-10T20:08:27.393Z" },
+]
+
+[[package]]
+name = "langchain-huggingface"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "langchain-core" },
+    { name = "tokenizers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/72/5f32c8e6db4d94c00252318aa7910102134b4bd6b2af1b13f2042f7f95f6/langchain_huggingface-0.3.0.tar.gz", hash = "sha256:d1cf93fb4d4eafc8b44edcd5fba904b27cbd3fda6cdef0e2321fbcf4efcda822", size = 24823, upload-time = "2025-06-10T20:50:44.739Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/da/7446c2eeacd420cb975ceb49c6feca7be40cf8ed3686a128ca78410c148f/langchain_huggingface-0.3.0-py3-none-any.whl", hash = "sha256:aab85d57e649c805d2f2a9f8d72d87b5d12c45dd4831309ac9c37753ddb237ed", size = 27359, upload-time = "2025-06-10T20:50:43.506Z" },
 ]
 
 [[package]]
@@ -1447,6 +1475,8 @@ dependencies = [
     { name = "gradio" },
     { name = "httpx" },
     { name = "langchain" },
+    { name = "langchain-chroma" },
+    { name = "langchain-huggingface" },
     { name = "loguru" },
     { name = "lxml" },
     { name = "pandas" },
@@ -1470,6 +1500,8 @@ requires-dist = [
     { name = "gradio", specifier = ">=5.33.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=0.3.25" },
+    { name = "langchain-chroma", specifier = ">=0.2.4" },
+    { name = "langchain-huggingface", specifier = ">=0.3.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml", specifier = ">=5.4.0" },
     { name = "pandas", specifier = ">=2.3.0" },

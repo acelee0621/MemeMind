@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_PATH: str = "source_documents/" 
 
     # ChromaDB 配置 ...
-    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500" 
+    CHROMA_HOST: str = "http://localhost"
+    CHROMA_PORT: int = 5500 
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 
     # Embedding 模型相关
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 50
 
     # Reranker 相关配置
+    RERANKER_MODEL_PATH: str = "local_models/reranker/Qwen3-Reranker-0.6B"
     INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
     FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
     RERANKER_INSTRUCTION: str = "给定一个网页搜索查询，检索回答该查询的相关段落"

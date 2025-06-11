@@ -2,8 +2,13 @@ from functools import lru_cache
 
 import torch
 from loguru import logger
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from app.core.config import settings
+
+""" 下载新模型命令
+    uv run huggingface-cli download Qwen/Qwen3-Embedding-0.6B /
+    --local-dir ./local_models/embedding/Qwen3-Embedding-0.6B
+"""
 
 # --- 1. 自定义 LangChain 嵌入类以支持 Qwen 的指令格式 ---
 
