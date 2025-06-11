@@ -1,6 +1,7 @@
 from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.models import TextChunk
 from app.schemas.schemas import TextChunkCreate
@@ -71,7 +72,7 @@ class TextChunkRepository:
     async def get_by_ids(self, chunk_ids: list[int]) -> list[TextChunk]:
         if not chunk_ids:
             return []
-        query = select(TextChunk).where(TextChunk.id.in_(chunk_ids))
+        query = select(TextChunk).where(TextChunk.id.in_(chunk_ids)).options(selectinload(TextChunk.source_document))
         result = await self.session.scalars(query)
         return list(result.all())
 

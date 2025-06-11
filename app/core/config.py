@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     LOCAL_STORAGE_PATH: str = "source_documents/" 
 
     # ChromaDB 配置 ...
-    CHROMA_HOST: str = "http://localhost"
+    CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 5500 
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 

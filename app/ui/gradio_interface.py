@@ -1,170 +1,178 @@
-# app/ui/gradio_interface.py
-
+import os
 import time
+import httpx
 import gradio as gr
 import pandas as pd
-from loguru import logger
-from typing import List
 
-# 直接从后端导入我们的链和数据库/服务创建工具
-from app.chains.qa_chain import create_rag_qa_chain, get_qwen_contextual_retriever
-from app.core.database import create_engine_and_session_for_celery
-from app.services.doc_service import SourceDocumentService
-from app.repository.doc_repository import SourceDocumentRepository
+# FastAPI 的基础URL，确保它指向你的应用地址
+FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 
 # ===================================================================
-# Gradio 回调函数 (不再是调用API的桥梁，而是直接执行业务逻辑)
+# Gradio 回调函数
 # ===================================================================
 
-async def stream_chat_gradio(query: str, history: List[list]):
-    """【问答模块】的流式回调函数"""
+
+async def stream_chat_gradio(query: str, history: list[dict]):
+    """【问答模块】通过 httpx 调用流式 API"""
     if not query or not query.strip():
         gr.Warning("请输入有效的问题！")
         return
     
-    logger.info(f"Gradio Chatbot 收到问题: '{query}'")
-    
-    # 获取 RAG 链并以流式方式调用
-    rag_chain = create_rag_qa_chain()
-    full_response = ""
-    history.append([query, ""]) # 先在界面上显示用户的问题
-    
-    # .astream() 返回一个异步生成器，我们在这里迭代它
-    async for chunk in rag_chain.astream(query):
-        full_response += chunk
-        history[-1][1] = full_response # 实时更新 Gradio Chatbot 的显示
-        yield "", history # 返回空字符串和更新后的历史记录
+    api_url = f"{FASTAPI_BASE_URL}/query/ask/stream"
+    payload = {"query": query}
+    history.append({"role": "user", "content": query})
+    history.append({"role": "assistant", "content": ""})
 
-# --- 用于文档管理的辅助函数 ---
-async def doc_service_provider():
-    """一个异步生成器，提供一次性的数据库会话和服务实例"""
-    engine, SessionLocal = create_engine_and_session_for_celery()
-    async with SessionLocal() as db:
-        repo = SourceDocumentRepository(db)
-        service = SourceDocumentService(repo)
-        yield service
-    await engine.dispose()
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            # 使用 client.stream 发起流式请求
+            async with client.stream("POST", api_url, json=payload) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_text():
+                    if chunk:
+                        history[-1]["content"] += chunk
+                        yield "", history
+    except Exception as e:
+        history[-1]["content"] = f"请求出错: {e}"
+        yield "", history
+
 
 async def get_all_docs_gradio():
-    """【文档管理】获取所有文档列表"""
-    logger.info("Gradio 正在刷新文档列表...")
-    async for service in doc_service_provider():
-        docs_list = await service.get_documents(limit=100, offset=0, order_by="created_at desc")
+    """【文档管理】通过 httpx 调用 API 获取所有文档列表"""
+    api_url = f"{FASTAPI_BASE_URL}/documents"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(api_url, params={"limit": 100, "offset": 0})
+            response.raise_for_status()
+            docs_list = response.json()
+        
         if not docs_list:
             return pd.DataFrame(columns=["ID", "文件名", "状态", "块数量", "上传时间"])
         
-        df = pd.DataFrame([doc.model_dump() for doc in docs_list])
+        df = pd.DataFrame(docs_list)
         df_display = df[["id", "original_filename", "status", "number_of_chunks", "created_at"]].copy()
+        df_display['created_at'] = pd.to_datetime(df_display['created_at']).dt.strftime('%Y-%m-%d %H:%M:%S')
         df_display.rename(columns={
             "id": "ID", "original_filename": "文件名", "status": "处理状态",
             "number_of_chunks": "块数量", "created_at": "上传时间"
         }, inplace=True)
         return df_display
+    except Exception as e:
+        gr.Error(f"无法加载文档列表: {e}")
+        return pd.DataFrame()
 
-async def upload_doc_gradio(file_obj):
-    """【文档管理】上传文件"""
+
+async def upload_doc_gradio(file_obj: gr.File):
+    """【文档管理】通过 httpx 上传文件"""
     if file_obj is None: 
         return "未选择文件"
     
-    logger.info(f"Gradio 正在上传文件: {file_obj.name}")
+    api_url = f"{FASTAPI_BASE_URL}/documents"
+    original_filename = getattr(file_obj, 'orig_name', os.path.basename(file_obj.name))
+    
+    files = {'file': (original_filename, open(file_obj.name, 'rb'), 'application/octet-stream')}
+    
     try:
-        # 读取文件内容
-        with open(file_obj.name, "rb") as f:
-            content_bytes = f.read()
-        
-        # 直接调用 service
-        async for service in doc_service_provider():
-            doc_response = await service.add_document(
-                file_content=content_bytes,
-                filename=file_obj.name,
-                content_type=file_obj.type
-            )
-        success_message = f"文件 '{doc_response.original_filename}' 上传成功！ID: {doc_response.id}"
-        logger.info(success_message)
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(api_url, files=files)
+            response.raise_for_status()
+        success_message = f"文件 '{original_filename}' 上传成功！"
         gr.Info(success_message)
         return success_message
     except Exception as e:
         error_message = f"文件上传失败: {e}"
-        logger.error(error_message, exc_info=True)
         gr.Error(error_message)
         return error_message
 
+
 async def delete_doc_gradio(doc_id_str: str):
-    """【文档管理】删除文档"""
+    """【文档管理】通过 httpx 删除指定ID文档"""
     if not doc_id_str or not doc_id_str.strip().isdigit():
-        message = "请输入有效的纯数字文档ID"
-        gr.Warning(message)
-        return message
+        return "请输入有效的纯数字文档ID"
     
     doc_id = int(doc_id_str)
-    logger.info(f"Gradio 正在删除文档 ID: {doc_id}")
+    api_url = f"{FASTAPI_BASE_URL}/documents/{doc_id}"
+    
     try:
-        async for service in doc_service_provider():
-            await service.delete_document(doc_id)
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(api_url)
+            response.raise_for_status()
         success_message = f"文档 ID: {doc_id} 已成功删除。"
         gr.Info(success_message)
         return success_message
     except Exception as e:
         error_message = f"删除失败: {e}"
-        logger.error(error_message, exc_info=True)
         gr.Error(error_message)
         return error_message
 
-async def retrieve_chunks_gradio(query: str):
-    """【检索测试】的回调函数"""
+async def retrieve_chunks_gradio(query: str, top_k: int):
+    """【检索测试】通过 httpx 调用 API"""
     if not query or not query.strip():
-        gr.Warning("请输入检索关键词！")
         return pd.DataFrame(), "请输入查询"
-        
+
+    top_k = int(top_k)
     t0 = time.monotonic()
-    logger.info(f"Gradio 正在执行调试检索: '{query}'")
+    api_url = f"{FASTAPI_BASE_URL}/query/retrieve-chunks"
+    payload = {"query": query, "top_k": top_k}
+
     try:
-        retriever = get_qwen_contextual_retriever()
-        retrieved_docs = await retriever.ainvoke(query)
-        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(api_url, json=payload)
+            response.raise_for_status()
+            retrieved_docs = response.json()
+
         if not retrieved_docs:
             return pd.DataFrame(), "未检索到任何相关内容。"
 
         data = [
             {
-                "相关度分数": doc.metadata.get('relevance_score', 'N/A'),
-                "文本块内容": doc.page_content,
-                "来源文件名": doc.metadata.get('source', 'N/A').split('/')[-1],
+                "相关度分数": f"{doc['metadata'].get('relevance_score', 0):.4f}",
+                "文本块内容": doc['page_content'],
+                "来源文件名": doc['metadata'].get('original_filename', '未知来源'),
             } for doc in retrieved_docs
         ]
+        
         df = pd.DataFrame(data)
         t1 = time.monotonic()
         duration_str = f"检索完成，总耗时: {t1 - t0:.2f} 秒"
-        logger.info(duration_str)
         return df, duration_str
     except Exception as e:
         error_message = f"检索时出错: {e}"
-        logger.error(error_message, exc_info=True)
         gr.Error(error_message)
         return pd.DataFrame(), error_message
 
+
 # ===================================================================
-# Gradio UI 界面定义 (使用 gr.Chatbot 优化)
+# Gradio UI 界面定义
 # ===================================================================
 
 with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_ui:
     gr.Markdown("# MemeMind RAG 应用控制台")
-
     with gr.Tabs():
         with gr.TabItem("智能问答"):
+            # ... (智能问答 Tab 保持不变)
             with gr.Row():
                 with gr.Column(scale=4):
-                    chatbot = gr.Chatbot(label="对话窗口", height=500)
-                    query_input = gr.Textbox(label="您的问题", placeholder="在这里输入你的问题...", show_label=False, container=False)
+                    chatbot = gr.Chatbot(label="对话窗口", height=500, type="messages")
+                    query_input = gr.Textbox(
+                        label="您的问题",
+                        placeholder="在这里输入你的问题...",
+                        show_label=False,
+                        container=False,
+                    )
                 with gr.Column(scale=1):
                     clear_button = gr.Button("清除对话", variant="secondary")
 
         with gr.TabItem("文档管理") as doc_management_tab:
-            # (文档管理UI布局保持不变)
-            gr.Markdown("管理您的知识库文档：上传新文件、查看已处理文件、删除不需要的文件。")
+            # ... (文档管理 Tab 保持不变)
+            gr.Markdown(
+                "管理您的知识库文档：上传新文件、查看已处理文件、删除不需要的文件。"
+            )
             with gr.Row():
                 with gr.Column(scale=1):
-                    upload_file_button = gr.File(label="上传新文档", file_count="single")
+                    upload_file_button = gr.File(
+                        label="上传新文档", file_count="single"
+                    )
                     upload_status_text = gr.Textbox(label="上传状态", interactive=False)
                     gr.Markdown("---")
                     delete_doc_id_input = gr.Textbox(label="输入要删除的文档ID")
@@ -172,24 +180,47 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
                     delete_status_text = gr.Textbox(label="删除状态", interactive=False)
                 with gr.Column(scale=3):
                     refresh_docs_button = gr.Button("刷新文档列表")
-                    file_list_df = gr.DataFrame(label="已上传文档列表", interactive=False, height=500)
+                    file_list_df = gr.DataFrame(
+                        label="已上传文档列表", interactive=False
+                    )
 
         with gr.TabItem("检索测试"):
-            # (检索测试UI布局保持不变)
-            gr.Markdown("在此测试您的 Embedding+Reranker 模型的检索效果，无需调用 LLM。")
+            gr.Markdown(
+                "在此测试您的 Embedding+Reranker 模型的检索效果，无需调用 LLM。"
+            )
             with gr.Row():
-                retrieve_query_input = gr.Textbox(label="输入检索关键词", lines=2, scale=3)
+                retrieve_query_input = gr.Textbox(
+                    label="输入检索关键词", lines=2, scale=3
+                )
+                # 添加一个用于输入 top_k 的数字输入框
+                retrieve_top_k_input = gr.Number(
+                    label="返回数量 (Top K)", value=5, minimum=1, maximum=50, step=1
+                )
                 retrieve_button = gr.Button("执行检索", variant="primary", scale=1)
             retrieve_timer_text = gr.Textbox(label="处理耗时", interactive=False)
-            retrieved_chunks_df = gr.DataFrame(label="检索到的文本块", interactive=False, wrap=True)
+            retrieved_chunks_df = gr.DataFrame(
+                label="检索到的文本块", interactive=False, wrap=True
+            )
 
     # --- 事件绑定 ---
-    query_input.submit(fn=stream_chat_gradio, inputs=[query_input, chatbot], outputs=[query_input, chatbot])
-    clear_button.click(lambda: (None, None), outputs=[query_input, chatbot])
-    
+    query_input.submit(
+        fn=stream_chat_gradio,
+        inputs=[query_input, chatbot],
+        outputs=[query_input, chatbot],
+    )
+    clear_button.click(lambda: (None, []), outputs=[query_input, chatbot])
+
     doc_management_tab.select(fn=get_all_docs_gradio, outputs=[file_list_df])
     refresh_docs_button.click(fn=get_all_docs_gradio, outputs=[file_list_df])
-    upload_file_button.upload(fn=upload_doc_gradio, inputs=[upload_file_button], outputs=[upload_status_text]).then(fn=get_all_docs_gradio, outputs=[file_list_df])
-    delete_button.click(fn=delete_doc_gradio, inputs=[delete_doc_id_input], outputs=[delete_status_text]).then(fn=get_all_docs_gradio, outputs=[file_list_df])
+    upload_file_button.upload(
+        fn=upload_doc_gradio, inputs=[upload_file_button], outputs=[upload_status_text]
+    ).then(fn=get_all_docs_gradio, outputs=[file_list_df])
+    delete_button.click(
+        fn=delete_doc_gradio, inputs=[delete_doc_id_input], outputs=[delete_status_text]
+    ).then(fn=get_all_docs_gradio, outputs=[file_list_df])
 
-    retrieve_button.click(fn=retrieve_chunks_gradio, inputs=[retrieve_query_input], outputs=[retrieved_chunks_df, retrieve_timer_text])
+    retrieve_button.click(
+        fn=retrieve_chunks_gradio,
+        inputs=[retrieve_query_input, retrieve_top_k_input],
+        outputs=[retrieved_chunks_df, retrieve_timer_text],
+    )

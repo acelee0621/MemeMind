@@ -1,6 +1,6 @@
 from loguru import logger
 
-from app.text_chunk.repository import TextChunkRepository
+from app.repository.chunk_repository import TextChunkRepository
 from app.schemas.schemas import TextChunkCreate, TextChunkResponse
 
 
@@ -14,7 +14,7 @@ class TextChunkService:
         new_chunk = await self.repository.create(data)
         return TextChunkResponse.model_validate(new_chunk)
 
-    async def add_chunks_for_document(
+    async def add_chunks_in_bulk(
         self, chunks_data: list[TextChunkCreate]
     ) -> list[TextChunkResponse]:
         new_chunks = await self.repository.create_bulk(chunks_data)
