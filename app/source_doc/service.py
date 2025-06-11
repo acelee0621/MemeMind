@@ -6,18 +6,15 @@ from urllib.parse import quote
 from loguru import logger
 from fastapi import UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-from botocore.exceptions import ClientError
 
 from app.core.config import settings
-from app.core.s3_client import s3_client
 from app.core.celery_app import celery_app
 from app.core.exceptions import NotFoundException, ForbiddenException
 from app.source_doc.repository import SourceDocumentRepository
 from app.schemas.schemas import (
     SourceDocumentCreate,
     SourceDocumentUpdate,
-    SourceDocumentResponse,
-    PresignedUrlResponse,
+    SourceDocumentResponse,    
 )
 
 

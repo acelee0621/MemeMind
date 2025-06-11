@@ -22,18 +22,15 @@ class Settings(BaseSettings):
     # Redis 配置
     REDIS_HOST: str = "localhost:6379"
 
-    # S3/MinIO 配置
-    MINIO_ENDPOINT: str = "localhost:9000"
-    MINIO_ACCESS_KEY: str = "minio"
-    MINIO_SECRET_KEY: str = "miniosecret"
-    MINIO_USE_SSL: bool = False
-    MINIO_BUCKET: str = "mememind"
+    # 上传文件路径配置
+    LOCAL_STORAGE_PATH: str = "source_documents/" 
 
     # ChromaDB 配置 ...
-    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500"  # ChromaDB HTTP 访问地址
-    CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"  # ChromaDB 集合名称
+    CHROMA_HTTP_ENDPOINT: str = "http://localhost:5500" 
+    CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 
     # Embedding 模型相关
+    EMBEDDING_MODEL_PATH: str = "local_models/embedding/Qwen3-Embedding-0.6B"
     EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = "为这个句子生成表示以用于检索相关文章"
     EMBEDDING_DIMENSIONS: int = 1024  # 嵌入维度, Qwen 0.6B为1024 Qwen 4B为2560
     CHUNK_SIZE: int = 512
