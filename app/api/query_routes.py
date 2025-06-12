@@ -9,9 +9,16 @@ from app.chains.qa_chain import get_standalone_retriever
 router = APIRouter(prefix="/query", tags=["Query & RAG"])
 
 # 依赖注入 QueryService
-def get_query_service() -> QueryService:
-    # 由于 QueryService 内部用 lru_cache 缓存了链，这里可以直接实例化
-    return QueryService()
+# def get_query_service() -> QueryService:
+#     # 由于 QueryService 内部用 lru_cache 缓存了链，这里可以直接实例化
+#     return QueryService()
+
+
+async def get_query_service() -> QueryService:
+    """异步创建并缓存 QueryService 实例"""
+    logger.info("正在异步创建 QueryService")
+    query_service = await QueryService.create()
+    return query_service
 
 # --- 新的、简化的请求和响应模型 ---
 class AskRequest(BaseModel):

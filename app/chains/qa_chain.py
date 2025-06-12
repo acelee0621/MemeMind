@@ -7,6 +7,9 @@ from langchain_core.runnables import (
 )
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from time import perf_counter
+import asyncio
+from typing import List, Dict, Any
 
 from app.core.config import settings
 from app.chains.vector_store import get_chroma_vector_store
@@ -14,20 +17,28 @@ from app.chains.reranker_loader import rerank_qwen_documents
 from app.chains.llm_loader import get_qwen_llm
 
 
-def create_rag_qa_chain():
+async def create_rag_qa_chain():
     """
-    使用 LCEL (LangChain Expression Language) 组装完整的 RAG 问答链。
-    新版本手动实现了“召回后精排”的流程，以获得最大的灵活性和稳定性。
+    使用 LCEL 组装完整的 RAG 问答链，带手动精排。
     """
-    logger.info("正在创建新的 RAG 问答链 (带手动精排)...")
+    task_logger = logger.bind(chain="rag_qa")
+    task_logger.info("正在创建新的 RAG 问答链 (带手动精排)...")
 
-    # a. 定义一个函数，用于将检索到的文档列表格式化为字符串上下文
-    def format_docs(docs: list[Document]) -> str:
+    def format_docs(docs: List[Document]) -> str:
         if not docs:
+            task_logger.warning("没有找到相关文档")
             return "没有找到相关信息。"
-        return "\n---\n".join(doc.page_content for doc in docs)
+        formatted = []
+        for i, doc in enumerate(docs):
+            metadata = doc.metadata or {}
+            source = metadata.get("original_filename", "未知来源")
+            score = metadata.get("relevance_score", 0.0)
+            formatted.append(
+                f"文档 {i + 1} (来源: {source}, 相关性得分: {score:.2f}):\n{doc.page_content}"
+            )
+        task_logger.info(f"格式化 {len(docs)} 个文档")
+        return "\n---\n".join(formatted)
 
-    # b. 定义提示词模板
     prompt_template = ChatPromptTemplate.from_messages(
         [
             ("system", settings.LLM_SYSTEM_PROMPT),
@@ -46,56 +57,48 @@ def create_rag_qa_chain():
         ]
     )
 
-    # c. 获取基础的向量检索器
     vector_retriever = get_chroma_vector_store().as_retriever(
         search_kwargs={"k": settings.INITIAL_RETRIEVAL_TOP_K}
     )
-
-    # d. 加载 LLM
     llm = get_qwen_llm()
 
-    # e. 使用 LCEL 组装新的链
-    rag_chain = (
-        {
-            # 第一步(召回): 并行执行，将原始问题(query)传递下去，同时用它调用向量检索器得到初始文档(documents)
-            "documents": vector_retriever,
-            "query": RunnablePassthrough(),
+    async def async_rerank(input_dict: Dict[str, Any]) -> List[Document]:
+        """异步精排文档，映射 question 到 query"""
+        start_time = perf_counter()
+        if "question" not in input_dict or not input_dict["question"]:
+            task_logger.error("精排输入缺少 question 字段或为空")
+            raise ValueError("查询字符串不能为空")
+        if "documents" not in input_dict:
+            task_logger.error("精排输入缺少 documents 字段")
+            raise ValueError("文档列表不能为空")
+
+        # task_logger.debug(f"精排输入: {input_dict}")
+        task_logger.info(f"精排 {len(input_dict['documents'])} 个召回文档")
+        rerank_input = {
+            "query": input_dict["question"],  # 映射 question 到 query
+            "documents": input_dict["documents"],
+            "top_n": settings.FINAL_CONTEXT_TOP_N,  # 使用配置中的 top_n
         }
-        # 第二步(精排): 将上一步的输出字典 `{"documents": ..., "query": ...}` 整个传给我们的 rerank 函数
-        | RunnableLambda(rerank_qwen_documents)
-        # 第三步(格式化): 将精排后的文档列表格式化为单一的字符串上下文
-        | RunnableLambda(format_docs)
-        # 第四步(构建最终提示词): 将格式化后的上下文和原始问题组合成一个字典，以匹配提示词模板
-        | RunnableParallel(
-            context=RunnablePassthrough(),
-            question=RunnablePassthrough(),  # 这里需要重新传递问题，但上下文已经包含了它，这是一个小技巧
+        result = await asyncio.to_thread(rerank_qwen_documents, rerank_input)
+        task_logger.info(
+            f"精排后保留 {len(result)} 个文档，耗时 {perf_counter() - start_time:.2f} 秒"
         )
-        # 修正：一个更清晰的构建方式
-        | (
-            lambda context_str: {
-                "context": context_str,
-                "question": RunnablePassthrough(),
-            }
+        return result
+
+    # 简化的 LCEL 链条
+    rag_chain = (
+        RunnableParallel(documents=vector_retriever, question=RunnablePassthrough())
+        | RunnableLambda(async_rerank)
+        | RunnableLambda(format_docs)
+        | RunnableParallel(
+            context=RunnablePassthrough(), question=RunnablePassthrough()
         )
         | prompt_template
-        # 第五步: 调用 LLM
         | llm
-        # 第六步: 解析输出为字符串
         | StrOutputParser()
     )
 
-    # 一个更简洁、等效的链条写法
-    # setup = RunnableParallel(
-    #     {"documents": vector_retriever, "query": RunnablePassthrough()}
-    # )
-    # reranked_docs = RunnableLambda(rerank_qwen_documents)
-    # final_prompt = RunnableParallel(
-    #     context=reranked_docs | RunnableLambda(format_docs),
-    #     question=lambda x: x["query"] # 从最初的并行结果中提取问题
-    # )
-    # rag_chain = setup | final_prompt | prompt_template | llm | StrOutputParser()
-
-    logger.success("新的 RAG 问答链创建成功。")
+    task_logger.success("新的 RAG 问答链创建成功。")
     return rag_chain
 
 

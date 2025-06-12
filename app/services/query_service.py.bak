@@ -7,17 +7,9 @@ class QueryService:
     它的职责是加载并调用预先构建好的 LangChain RAG 链。
     """
     def __init__(self):
-        # 避免在 __init__ 中直接调用异步函数
-        self.rag_chain = None
-        logger.info("QueryService 已初始化，等待异步加载 RAG 链。")
-
-    @classmethod
-    async def create(cls):
-        """异步创建 QueryService 实例"""
-        instance = cls()
-        instance.rag_chain = await create_rag_qa_chain()  # 异步调用
-        logger.info("QueryService 已异步加载 RAG 链。")
-        return instance
+        # 在服务实例化时，直接创建并持有 RAG 链
+        self.rag_chain = create_rag_qa_chain()
+        logger.info("QueryService 已初始化，并成功创建 RAG 链。")
 
     async def stream_answer(self, query: str):
         """
@@ -30,7 +22,6 @@ class QueryService:
             str: LLM 生成的答案片段 (token)。
         """
         logger.info(f"开始流式处理查询: '{query}'")
-        if self.rag_chain is None:
-            raise RuntimeError("RAG 链未初始化，请使用 QueryService.create() 创建实例")
+        # LangChain 的 .astream() 方法会返回一个异步生成器
         async for chunk in self.rag_chain.astream(query):
             yield chunk

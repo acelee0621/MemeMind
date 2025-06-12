@@ -37,8 +37,8 @@ def get_qwen_llm() -> HuggingFacePipeline:
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=1024,
-            temperature=0.7,
-            top_p=0.9,
+            temperature=0.6,
+            top_p=0.8,
         )
         logger.info("transformers 的 text-generation pipeline 创建成功。")
 

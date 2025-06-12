@@ -32,20 +32,29 @@ class Settings(BaseSettings):
 
     # Embedding 模型相关
     EMBEDDING_MODEL_PATH: str = "local_models/embedding/Qwen3-Embedding-0.6B"
-    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = "为这个句子生成表示以用于检索相关文章"
+    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = (
+        "生成表示以检索与查询的核心主题或概念高度相关的知识库文档"
+    )
     EMBEDDING_DIMENSIONS: int = 1024  # 嵌入维度, Qwen 0.6B为1024 Qwen 4B为2560
-    CHUNK_SIZE: int = 512
-    CHUNK_OVERLAP: int = 50
+    CHUNK_SIZE: int = 800
+    CHUNK_OVERLAP: int = 100
 
     # Reranker 相关配置
     RERANKER_MODEL_PATH: str = "local_models/reranker/Qwen3-Reranker-0.6B"
     INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
     FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
-    RERANKER_INSTRUCTION: str = "给定一个网页搜索查询，检索回答该查询的相关段落"
+    RERANKER_INSTRUCTION: str = (
+        "Evaluate whether the document directly addresses the query's core topic, concept, or knowledge management theme. "
+        "Return 'yes' if the document provides clear, relevant information about knowledge bases, themes, or concepts, "
+        "and 'no' if it is unrelated or only tangentially relevant."
+    )
 
     # LLM 相关配置
     LLM_MODEL_PATH: str = "local_models/llm/Qwen2.5-1.5B-Instruct"
-    LLM_SYSTEM_PROMPT: str = "You are a helpful assistant."
+    LLM_SYSTEM_PROMPT: str = (
+        "You are a knowledgeable assistant specialized in knowledge management and personal knowledge bases. "
+        "Provide clear, structured, and accurate answers based on the given context, focusing on themes, concepts, and reliable information."
+    )
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"

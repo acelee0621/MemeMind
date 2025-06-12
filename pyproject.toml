@@ -18,6 +18,7 @@ dependencies = [
     "langchain-community>=0.3.25",
     "langchain-huggingface>=0.3.0",
     "langchain-unstructured>=0.1.5",
+    "libmagic>=1.0",
     "loguru>=0.7.3",
     "lxml>=5.4.0",
     "pandas>=2.3.0",

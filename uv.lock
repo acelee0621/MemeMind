@@ -1475,6 +1475,12 @@ wheels = [
 ]
 
 [[package]]
+name = "libmagic"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/86/419ddfc3879b4565a60e0c75b6d19baec48428cbc2f15aca5320b3d136f6/libmagic-1.0.tar.gz", hash = "sha256:649f1ce7fb7c92796badbb812555e4a926351da4f5cdf82e810b5cd371aedf8d", size = 3665, upload-time = "2012-03-02T17:56:36.681Z" }
+
+[[package]]
 name = "loguru"
 version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1643,6 +1649,7 @@ dependencies = [
     { name = "langchain-community" },
     { name = "langchain-huggingface" },
     { name = "langchain-unstructured" },
+    { name = "libmagic" },
     { name = "loguru" },
     { name = "lxml" },
     { name = "pandas" },
@@ -1672,6 +1679,7 @@ requires-dist = [
     { name = "langchain-community", specifier = ">=0.3.25" },
     { name = "langchain-huggingface", specifier = ">=0.3.0" },
     { name = "langchain-unstructured", specifier = ">=0.1.5" },
+    { name = "libmagic", specifier = ">=1.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml", specifier = ">=5.4.0" },
     { name = "pandas", specifier = ">=2.3.0" },
