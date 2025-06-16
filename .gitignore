@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 app/embeddings
 app/llm_models
-local_models/
-source_documents/
+/local_models/
+/source_documents/
 # Virtual environments
 .venv
