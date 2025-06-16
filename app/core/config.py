@@ -25,35 +25,32 @@ class Settings(BaseSettings):
     # 上传文件路径配置
     LOCAL_STORAGE_PATH: str = "source_documents/"
 
-    # ChromaDB 配置 ...
+    # ChromaDB 配置
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 5500
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 
-    # Embedding 模型相关
-    EMBEDDING_MODEL_PATH: str = "local_models/embedding/Qwen3-Embedding-0.6B"
-    EMBEDDING_INSTRUCTION_FOR_RETRIEVAL: str = (
-        "生成表示以检索与查询的核心主题或概念高度相关的知识库文档"
-    )
-    EMBEDDING_DIMENSIONS: int = 1024  # 嵌入维度, Qwen 0.6B为1024 Qwen 4B为2560
+    # --- RAG 核心配置 ---
+
+    # Embedding 模型 (BAAI BGE)
+    EMBEDDING_MODEL_PATH: str = "local_models/embedding/bge-large-zh-v1.5"
+
+    # Reranker 模型 (BAAI BGE)
+    RERANKER_MODEL_PATH: str = "local_models/reranker/bge-reranker-v2-m3"
+
+    # LLM 模型 (Qwen)
+    LLM_MODEL_PATH: str = "local_models/llm/Qwen3-1.7B"
+
+    # 检索参数
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
+    INITIAL_RETRIEVAL_TOP_K: int = 50  # 向量库粗召回返回的文档数量
+    FINAL_CONTEXT_TOP_N: int = 5  # Reranker精排后最终提供给LLM的文档数量
 
-    # Reranker 相关配置
-    RERANKER_MODEL_PATH: str = "local_models/reranker/Qwen3-Reranker-0.6B"
-    INITIAL_RETRIEVAL_TOP_K: int = 50  # 第一阶段向量召回的数量
-    FINAL_CONTEXT_TOP_N: int = 5  # Rerank 后最终选取的数量
-    RERANKER_INSTRUCTION: str = (
-        "Evaluate whether the document directly addresses the query's core topic, concept, or knowledge management theme. "
-        "Return 'yes' if the document provides clear, relevant information about knowledge bases, themes, or concepts, "
-        "and 'no' if it is unrelated or only tangentially relevant."
-    )
-
-    # LLM 相关配置
-    LLM_MODEL_PATH: str = "local_models/llm/Qwen2.5-1.5B-Instruct"
+    # LLM 系统提示
     LLM_SYSTEM_PROMPT: str = (
-        "You are a knowledgeable assistant specialized in knowledge management and personal knowledge bases. "
-        "Provide clear, structured, and accurate answers based on the given context, focusing on themes, concepts, and reliable information."
+        "你是一个精通知识管理和个人知识库的智能助手。"
+        "请根据下面提供的上下文信息，用清晰、结构化、准确的语言回答问题，并聚焦于主题、概念和可靠信息。"
     )
 
     model_config = SettingsConfigDict(
@@ -63,7 +60,7 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings():
-    return Settings()  # type: ignore[attr-defined]
+    return Settings()
 
 
 settings = get_settings()

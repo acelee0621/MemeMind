@@ -15,8 +15,8 @@ from app.utils.migrations import run_migrations
 from app.api import doc_routes, query_routes
 from app.ui.gradio_interface import rag_demo_ui
 # 导入我们所有的模型加载器
-from app.chains.embedding_loader import get_qwen_embeddings
-from app.chains.reranker_loader import _get_reranker_model_and_tokenizer
+from app.chains.embedding_loader import get_bge_embeddings
+from app.chains.reranker_loader import get_bge_reranker
 from app.chains.llm_loader import get_qwen_llm
 
 
@@ -33,8 +33,8 @@ async def lifespan(app: FastAPI):
     # 这样可以防止它们阻塞主线程
     startup_tasks = [
         asyncio.to_thread(initialize_database_for_fastapi),
-        # asyncio.to_thread(get_qwen_embeddings),
-        # asyncio.to_thread(_get_reranker_model_and_tokenizer),
+        # asyncio.to_thread(get_bge_embeddings),
+        # asyncio.to_thread(get_bge_reranker),
         # asyncio.to_thread(get_qwen_llm),
     ]
 

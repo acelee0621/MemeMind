@@ -123,14 +123,19 @@ async def delete_doc_gradio(doc_id_str: str):
 
 
 async def retrieve_chunks_gradio(query: str, top_k: int):
-    """【检索测试】通过 httpx 调用 API"""
+    """
+    【检索测试】通过 httpx 调用 API，并展示精排后的文档及其相关度分数。
+    """
     if not query or not query.strip():
-        return pd.DataFrame(), "请输入查询"
+        gr.Warning("请输入有效的查询内容！")
+        return pd.DataFrame(), "查询内容不能为空。"
 
     top_k = int(top_k)
     t0 = time.monotonic()
     api_url = f"{FASTAPI_BASE_URL}/query/retrieve-chunks"
     payload = {"query": query, "top_k": top_k}
+    
+    gr.Info("正在执行检索和精排...")
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -140,7 +145,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
 
         if not retrieved_docs:
             return pd.DataFrame(), "未检索到任何相关内容。"
-
+        
         data = [
             {
                 "相关度分数": f"{doc['metadata'].get('relevance_score', 0):.4f}",
@@ -154,6 +159,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
         t1 = time.monotonic()
         duration_str = f"检索完成，总耗时: {t1 - t0:.2f} 秒"
         return df, duration_str
+    
     except Exception as e:
         error_message = f"检索时出错: {e}"
         gr.Error(error_message)

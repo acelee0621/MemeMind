@@ -5,75 +5,61 @@ from loguru import logger
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from app.core.config import settings
 
-
-""" 下载新模型命令
-    uv run huggingface-cli download Qwen/Qwen3-Embedding-0.6B /
-    --local-dir ./local_models/embedding/Qwen3-Embedding-0.6B
-"""
-
-# --- 1. 自定义 LangChain 嵌入类以支持 Qwen 的指令格式 ---
-
-
-class QwenInstructionalEmbeddings(HuggingFaceEmbeddings):
+class BGEInstructionalEmbeddings(HuggingFaceEmbeddings):
     """
-    一个自定义的嵌入类，继承自 HuggingFaceEmbeddings。
-    它专门用于处理像 Qwen 这样需要在查询（Query）前添加特定指令（Instruction）的模型。
+    为 BAAI/bge 系列 embedding 模型定制的嵌入类。
+    
+    它会自动为所有"查询"任务的文本添加BGE模型要求的特定指令。
+    该类同时支持同步和异步操作。
     """
-
-    query_instruction: str
+    
+    # BGE中文模型进行检索任务时，官方推荐的指令
+    query_instruction: str = "为这个句子生成表示以用于检索相关文章："
 
     def embed_query(self, text: str) -> list[float]:
         """
-        重写 embed_query 方法。
-        这是 LangChain 中专门用于处理单个查询文本的方法。
+        对单个查询进行同步嵌入，并自动添加指令。
         """
-        # 按照 Qwen 的要求，格式化查询文本
-        instructed_text = f"Instruct: {self.query_instruction}\nQuery: {text}"
-
-        # 调用父类的 embed_query 方法，用格式化后的文本进行嵌入
+        instructed_text = self.query_instruction + text
         return super().embed_query(instructed_text)
 
-    # embed_documents 方法无需重写，因为 Qwen 的文档侧不需要指令，
-    # 父类的默认行为（直接嵌入文本列表）正好符合要求。
-
-
-# --- 2. 创建并缓存嵌入模型实例的工厂函数 ---
-
+    async def aembed_query(self, text: str) -> list[float]:
+        """
+        对单个查询进行异步嵌入，并自动添加指令。
+        """
+        instructed_text = self.query_instruction + text
+        return await super().aembed_query(instructed_text)
 
 @lru_cache(maxsize=1)
-def get_qwen_embeddings() -> QwenInstructionalEmbeddings:
+def get_bge_embeddings() -> BGEInstructionalEmbeddings:
     """
-    加载并缓存 Qwen 嵌入模型，返回一个配置好的自定义实例。
-    使用 lru_cache 确保在应用生命周期内模型只被加载一次。
+    加载并缓存 BAAI BGE 嵌入模型。
     """
-    logger.info("开始初始化 Qwen 嵌入模型组件...")
+    logger.info("开始初始化 BAAI BGE 嵌入模型组件...")
 
-    # --- 自动设备检测 ---
+    # 自动设备检测
     if torch.cuda.is_available():
         device = "cuda"
-        logger.info("检测到 CUDA，将使用 GPU。")
+        logger.info("检测到 CUDA，BGE Embedding 将使用 GPU。")
     elif torch.backends.mps.is_available():
         device = "mps"
-        logger.info("检测到 MPS (Apple Silicon)，将使用 MPS。")
+        logger.info("检测到 MPS (Apple Silicon)，BGE Embedding 将使用 MPS。")
     else:
         device = "cpu"
-        logger.info("未检测到 CUDA 或 MPS，将使用 CPU。")
-
+        logger.info("未检测到 CUDA 或 MPS，BGE Embedding 将使用 CPU。")
+    
     try:
-        # 使用我们自定义的类来实例化
-        qwen_embeddings = QwenInstructionalEmbeddings(
-            # a. 传入自定义指令
-            query_instruction=settings.EMBEDDING_INSTRUCTION_FOR_RETRIEVAL,
-            # b. 传入 HuggingFaceEmbeddings 的标准参数
+        # 使用我们定制的 BGEInstructionalEmbeddings 类
+        bge_embeddings = BGEInstructionalEmbeddings(            
             model_name=settings.EMBEDDING_MODEL_PATH,
             model_kwargs={"device": device},
             encode_kwargs={
-                "normalize_embeddings": True,  # 推荐进行归一化
+                # BGE 模型推荐进行归一化
+                "normalize_embeddings": True,
             },
         )
-        logger.success(f"Qwen 嵌入模型组件初始化成功，运行于设备: '{device}'")
-        return qwen_embeddings
-
+        logger.success(f"BAAI BGE 嵌入模型组件初始化成功，运行于设备: '{device}'")
+        return bge_embeddings
     except Exception as e:
-        logger.error(f"初始化 Qwen 嵌入模型组件失败: {e}", exc_info=True)
+        logger.error(f"初始化 BAAI BGE 嵌入模型组件失败: {e}", exc_info=True)
         raise
