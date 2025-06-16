@@ -55,17 +55,7 @@ prompt_template_a = (
     "### 问题 ###\n"
     "{question}\n\n"
     "### 答案 ###"
-)
-
-prompt_template_b = (
-    "<|im_start|>system\n"
-    "你是一位知识库问答助手。你的任务是严格根据用户提供的“上下文”来回答“问题”。\n"
-    "你的回答必须绝对简洁，直奔主题。禁止进行任何与答案核心无关的分析、联想或评价。\n"
-    "如果上下文信息不足以回答问题，你的唯一回答应该是“无法确定”。<|im_end|>\n"
-    "<|im_start|>user\n"
-    "【上下文】\n{context}\n\n"
-    "【问题】\n{question}<|im_end|>\n"
-    "<|im_start|>assistant\n"
+    "请只回答本轮问题，回答完成后立即停止。"
 )
 
 
