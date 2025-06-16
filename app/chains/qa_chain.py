@@ -51,9 +51,8 @@ async def create_rag_qa_chain():
     task_logger.info("正在创建RAG问答链...")
 
     prompt = PromptTemplate.from_template(
-        "你是一位知识助手。请基于以下参考资料直接、简洁地回答用户问题。"
-        "不要重复资料内容，不要进行结构分析或评论，只输出最终答案。\n\n"
-        "参考资料：\n{context}\n\n问题：{question}\n\n答案："
+        "你是一位知识助手。请仅基于下列参考资料回答问题，要求语言简洁明确，避免分析、复述、评论。"
+        "若资料不足，请直接回答“无法确定”。\n\n参考资料：\n{context}\n\n问题：{question}\n\n答案："
     )
 
     llm = get_qwen_llm()
