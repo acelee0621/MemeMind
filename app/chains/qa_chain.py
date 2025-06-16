@@ -2,11 +2,7 @@ from loguru import logger
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain_core.documents import Document
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import (
-    RunnableParallel,
-    RunnablePassthrough,
-    RunnableLambda,
-)
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.tracers import ConsoleCallbackHandler
 
@@ -35,6 +31,7 @@ def format_docs(docs: list[Document]) -> str:
     return "\n\n".join(formatted_docs)
 
 
+# 不得已才需要用的输出答案修剪
 def clean_repetition(text: str) -> str:
     lines = text.strip().splitlines()
     seen = set()
@@ -46,14 +43,37 @@ def clean_repetition(text: str) -> str:
     return "\n".join(final)[:300]  # 限制长度
 
 
+prompt_template_a = (
+    "### 指令 ###\n"
+    "你是一位知识助手。请严格按照“参考资料”回答“问题”。\n"
+    "你的回答必须满足以下要求：\n"
+    "1. 语言简洁、明确，直接给出答案核心。\n"
+    "2. 禁止进行任何分析、复述或评价。\n"
+    "3. 如果“参考资料”无法回答“问题”，请直接回复“无法确定”。\n\n"
+    "### 参考资料 ###\n"
+    "{context}\n\n"
+    "### 问题 ###\n"
+    "{question}\n\n"
+    "### 答案 ###"
+)
+
+prompt_template_b = (
+    "<|im_start|>system\n"
+    "你是一位知识库问答助手。你的任务是严格根据用户提供的“上下文”来回答“问题”。\n"
+    "你的回答必须绝对简洁，直奔主题。禁止进行任何与答案核心无关的分析、联想或评价。\n"
+    "如果上下文信息不足以回答问题，你的唯一回答应该是“无法确定”。<|im_end|>\n"
+    "<|im_start|>user\n"
+    "【上下文】\n{context}\n\n"
+    "【问题】\n{question}<|im_end|>\n"
+    "<|im_start|>assistant\n"
+)
+
+
 async def create_rag_qa_chain():
     task_logger = logger.bind(chain="rag_qa_simple")
     task_logger.info("正在创建RAG问答链...")
 
-    prompt = PromptTemplate.from_template(
-        "你是一位知识助手。请仅基于下列参考资料回答问题，要求语言简洁明确，避免分析、复述、评论。"
-        "若资料不足，请直接回答“无法确定”。\n\n参考资料：\n{context}\n\n问题：{question}\n\n答案："
-    )
+    prompt = PromptTemplate.from_template(prompt_template_a)
 
     llm = get_qwen_llm()
     base_retriever = get_chroma_vector_store().as_retriever(
@@ -74,7 +94,7 @@ async def create_rag_qa_chain():
         | prompt
         | llm
         | StrOutputParser()
-        # | RunnableLambda(clean_repetition)
+        # | RunnableLambda(clean_repetition)  # 用于输出答案修剪，最好是用不到
     )
     task_logger.success("最简版RAG问答链创建成功！")
     return rag_chain
