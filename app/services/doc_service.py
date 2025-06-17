@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
-from app.core.celery_app import celery_app
+from app.tasks.document_task import process_document_task
 from app.models.models import StorageType
 from app.core.exceptions import NotFoundException
 from app.schemas.schemas import (
@@ -81,12 +81,12 @@ class SourceDocumentService:
             new_document = await self.repository.create(document_data)
 
             # ===== 4. 触发异步处理任务 =====
-            logger.info(f"发送文档处理任务到 Celery，文档 ID: {new_document.id}")
-            celery_app.send_task(
-                "app.tasks.document_task.process_document_task",
-                args=[new_document.id],
+            logger.info(f"发送文档处理任务到 TaskIQ，文档 ID: {new_document.id}")
+            task = await process_document_task.kiq(
                 task_id=f"process_document_task_{new_document.id}",
+                document_id=new_document.id,
             )
+            logger.debug(f"任务已发送，TaskIQ 任务 ID: {task.task_id}")
             return SourceDocumentResponse.model_validate(new_document)
         except Exception as e:
             # 数据库创建失败，需要清理已上传的本地文件，确保一致性

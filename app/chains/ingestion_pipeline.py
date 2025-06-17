@@ -1,5 +1,7 @@
 import asyncio
 from loguru import logger
+from taskiq import TaskiqDepends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -8,11 +10,8 @@ from langchain_unstructured import UnstructuredLoader
 
 from app.chains.vector_store import get_chroma_vector_store
 from app.core.config import settings
-from app.core.database import create_engine_and_session_for_celery
-from app.repository.doc_repository import SourceDocumentRepository
-from app.services.doc_service import SourceDocumentService
-from app.repository.chunk_repository import TextChunkRepository
-from app.services.chunk_service import TextChunkService
+from app.core.database import get_db_for_taskiq
+
 from app.schemas.schemas import TextChunkCreate
 
 
@@ -106,81 +105,75 @@ async def _add_to_vector_store(input_dict: dict) -> int:
 
 
 # --- 主流水线运行函数 ---
-async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
+async def run_ingestion_pipeline(
+    document_id: int,
+    task_id_for_log: str,
+    session: AsyncSession,
+):
     """
     一个完整的、基于LCEL的文档注入流水线。
     """
     task_logger = logger.bind(task_id=task_id_for_log)
     task_logger.info("开始执行基于LCEL的文档注入 Pipeline...")
-
-    db_engine, SessionLocal = create_engine_and_session_for_celery()
-
-    # 将 source_doc_service 的创建提到 try 外部，以便 finally 块也能使用
-    # 在Celery任务的上下文中，为每次任务调用创建一个新的会话和service实例是安全的
-    async with SessionLocal() as db:
-        doc_repo = SourceDocumentRepository(db)
-        # 我们将复用这个 service 实例
-        source_doc_service = SourceDocumentService(doc_repository=doc_repo)
+    from app.repository.doc_repository import SourceDocumentRepository
+    from app.services.doc_service import SourceDocumentService
+    from app.repository.chunk_repository import TextChunkRepository
+    from app.services.chunk_service import TextChunkService
 
     try:
-        async with SessionLocal() as db:
-            # 重新获取与当前会话绑定的服务和仓库
-            doc_repo = SourceDocumentRepository(db)
-            source_doc_service_in_try = SourceDocumentService(doc_repository=doc_repo)
-            chunk_repo = TextChunkRepository(db)
-            text_chunk_service = TextChunkService(chunk_repo)
+        # 重新获取与当前会话绑定的服务和仓库
+        doc_repo = SourceDocumentRepository(session)
+        source_doc_service = SourceDocumentService(doc_repository=doc_repo)
+        chunk_repo = TextChunkRepository(session)
+        text_chunk_service = TextChunkService(chunk_repo)
 
-            # --- 1. 准备工作：使用 service 层更新状态 ---
-            await source_doc_service_in_try.update_document_processing_info(
-                document_id, status="processing"
+        # --- 1. 准备工作：使用 service 层更新状态 ---
+        await source_doc_service.update_document_processing_info(
+            document_id, status="processing"
+        )
+        doc_record = await doc_repo.get_by_id(document_id)
+        task_logger.info(f"状态更新为 'processing', 文件路径: '{doc_record.file_path}'")
+
+        # --- 2. 定义LCEL流水线 ---
+        ingestion_chain = (
+            RunnablePassthrough.assign(
+                chunks=RunnableLambda(_load_docs) | RunnableLambda(_split_docs)
             )
-            doc_record = await doc_repo.get_by_id(document_id)
-            task_logger.info(
-                f"状态更新为 'processing', 文件路径: '{doc_record.file_path}'"
+            | RunnablePassthrough.assign(
+                sql_chunks=RunnableLambda(_store_chunks_to_sql)
             )
+            | RunnableLambda(_add_to_vector_store)
+        )
 
-            # --- 2. 定义LCEL流水线 ---
-            ingestion_chain = (
-                RunnablePassthrough.assign(
-                    chunks=RunnableLambda(_load_docs) | RunnableLambda(_split_docs)
-                )
-                | RunnablePassthrough.assign(
-                    sql_chunks=RunnableLambda(_store_chunks_to_sql)
-                )
-                | RunnableLambda(_add_to_vector_store)
+        # --- 3. 执行流水线 ---
+        initial_input = {
+            "doc_record": doc_record,
+            "text_chunk_service": text_chunk_service,
+            "task_id": task_id_for_log,
+        }
+        number_of_chunks = await ingestion_chain.ainvoke(initial_input)
+
+        # --- 4. 收尾工作：使用 service 层更新最终状态 ---
+        if number_of_chunks > 0:
+            await source_doc_service.update_document_processing_info(
+                document_id,
+                status="ready",
+                number_of_chunks=number_of_chunks,
+                set_processed_now=True,  # service层会自动处理时间
+                error_message=None,
             )
-
-            # --- 3. 执行流水线 ---
-            initial_input = {
-                "doc_record": doc_record,
-                "text_chunk_service": text_chunk_service,
-                "task_id": task_id_for_log,
-            }
-            number_of_chunks = await ingestion_chain.ainvoke(initial_input)
-
-            # --- 4. 收尾工作：使用 service 层更新最终状态 ---
-            if number_of_chunks > 0:
-                await source_doc_service_in_try.update_document_processing_info(
-                    document_id,
-                    status="ready",
-                    number_of_chunks=number_of_chunks,
-                    set_processed_now=True,  # service层会自动处理时间
-                    error_message=None,
-                )
-                task_logger.success(
-                    "[5/5 Finish] Pipeline 处理成功，文档状态更新为 'ready'。"
-                )
-                return {"status": "success", "chunks_created": number_of_chunks}
-            else:
-                await source_doc_service_in_try.update_document_processing_info(
-                    document_id,
-                    status="error",
-                    error_message="文档解析后未产生任何文本块",
-                )
-                task_logger.warning(
-                    "[5/5 Finish] 文档解析后未产生任何文本块，任务终止。"
-                )
-                return {"status": "warning", "message": "No content to process."}
+            task_logger.success(
+                "[5/5 Finish] Pipeline 处理成功，文档状态更新为 'ready'。"
+            )
+            return {"status": "success", "chunks_created": number_of_chunks}
+        else:
+            await source_doc_service.update_document_processing_info(
+                document_id,
+                status="error",
+                error_message="文档解析后未产生任何文本块",
+            )
+            task_logger.warning("[5/5 Finish] 文档解析后未产生任何文本块，任务终止。")
+            return {"status": "warning", "message": "No content to process."}
 
     except Exception as e:
         task_logger.error(f"Pipeline 处理失败: {e}", exc_info=True)
@@ -189,6 +182,3 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
             document_id, status="error", error_message=str(e)[:500]
         )
         raise e
-    finally:
-        await db_engine.dispose()
-        task_logger.info("数据库连接池已关闭。")

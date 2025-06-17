@@ -1,5 +1,6 @@
 import asyncio
 
+from loguru import logger
 from fastapi import FastAPI, Response
 import gradio as gr
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,13 +8,14 @@ from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.database import (
-    initialize_database_for_fastapi,
-    close_database_for_fastapi,
+    setup_database_connection,
+    shutdown_database_connection,
 )
 
 from app.utils.migrations import run_migrations
 from app.api import doc_routes, query_routes
 from app.ui.gradio_interface import rag_demo_ui
+from app.core.taskiq_app import broker
 
 # 导入我们所有的模型加载器
 from app.chains.embedding_loader import get_bge_embeddings
@@ -28,29 +30,31 @@ run_migrations()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- 应用启动阶段 ---
-    print("应用启动，开始并行加载所有资源...")
-
+    logger.info("应用启动，开始并行加载所有资源...")
+    await setup_database_connection()
+    await broker.startup()
     # 将所有同步的、耗时的启动任务都封装成一个可在事件循环中等待的对象
     # 这样可以防止它们阻塞主线程
-    startup_tasks = [
-        asyncio.to_thread(initialize_database_for_fastapi),
-        # asyncio.to_thread(get_bge_embeddings),
-        # asyncio.to_thread(get_bge_reranker),
-        # asyncio.to_thread(get_qwen_llm),
-    ]
+    # startup_tasks = [
+    #     asyncio.to_thread(initialize_database_for_fastapi),
+    #     # asyncio.to_thread(get_bge_embeddings),
+    #     # asyncio.to_thread(get_bge_reranker),
+    #     # asyncio.to_thread(get_qwen_llm),
+    # ]
 
     # 使用 asyncio.gather 来【并行】执行所有启动任务
     # 这会比一个一个顺序执行要快得多
-    await asyncio.gather(*startup_tasks)
+    # await asyncio.gather(*startup_tasks)
 
-    print("所有资源加载完毕，应用准备就绪。🚀")
+    logger.info("所有资源加载完毕，应用准备就绪。🚀")
 
     yield
 
     # --- 应用关闭阶段 ---
-    print("应用关闭，开始释放资源...")
-    await close_database_for_fastapi()
-    print("资源释放完毕。")
+    logger.info("应用关闭，开始释放资源...")
+    await shutdown_database_connection()
+    await broker.shutdown()
+    logger.info("资源释放完毕。")
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
