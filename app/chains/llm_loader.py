@@ -38,10 +38,11 @@ def get_qwen_llm() -> HuggingFacePipeline:
             model=model,
             tokenizer=tokenizer,
             max_new_tokens=512,
-            temperature=0.6,
-            top_p=0.9,
+            temperature=0.7,
+            top_p=0.8,
             do_sample=True,
-            eos_token_id=terminator_ids,            
+            eos_token_id=terminator_ids,
+            generation_kwargs={"presence_penalty": 1.5}                      
         )
         logger.info(
             "transformers 的 text-generation pipeline 创建成功，并已配置正确的终止符。"
