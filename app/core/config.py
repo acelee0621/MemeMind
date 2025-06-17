@@ -47,12 +47,6 @@ class Settings(BaseSettings):
     INITIAL_RETRIEVAL_TOP_K: int = 50  # 向量库粗召回返回的文档数量
     FINAL_CONTEXT_TOP_N: int = 5  # Reranker精排后最终提供给LLM的文档数量
 
-    # LLM 系统提示
-    LLM_SYSTEM_PROMPT: str = (
-        "你是一个精通知识管理和个人知识库的智能助手。"
-        "请根据下面提供的上下文信息，用清晰、结构化、准确的语言回答问题，并聚焦于主题、概念和可靠信息。"
-    )
-
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
     )

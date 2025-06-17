@@ -1,5 +1,10 @@
 from typing import Optional, AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession, AsyncEngine
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    async_sessionmaker,
+    AsyncSession,
+    AsyncEngine,
+)
 
 from app.core.config import settings
 from app.models.models import Base
@@ -19,12 +24,13 @@ POSTGRES_DATABASE_URL = (
 # --- 2. FastAPI 生命周期管理函数 ---
 # 这两个函数是【专门】给 FastAPI 在 main.py 的 lifespan 中调用的。
 
+
 def initialize_database_for_fastapi():
     """
     在 FastAPI 应用启动时，创建全局的数据库引擎和会话工厂。
     """
     global engine, SessionLocal
-    
+
     engine = create_async_engine(
         POSTGRES_DATABASE_URL,
         pool_size=20,
@@ -48,6 +54,7 @@ async def close_database_for_fastapi():
         await engine.dispose()
         print("FastAPI 的数据库引擎连接池已关闭。")
 
+
 # --- 3. FastAPI 依赖注入函数 ---
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
@@ -56,9 +63,10 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     if SessionLocal is None:
         raise Exception("数据库未初始化。请检查 FastAPI 的 lifespan 配置。")
-    
+
     async with SessionLocal() as session:
         yield session
+
 
 # --- 4. Celery 专属的工厂函数 ---
 # 给 Celery 任务使用
@@ -69,8 +77,10 @@ def create_engine_and_session_for_celery():
     """
     # 注意：这里创建的是局部变量 celery_engine, CelerySessionLocal
     celery_engine = create_async_engine(POSTGRES_DATABASE_URL, echo=False)
-    CelerySessionLocal = async_sessionmaker(class_=AsyncSession, expire_on_commit=False, bind=celery_engine)
-    
+    CelerySessionLocal = async_sessionmaker(
+        class_=AsyncSession, expire_on_commit=False, bind=celery_engine
+    )
+
     # 返回这两个新创建的、临时的实例
     return celery_engine, CelerySessionLocal
 

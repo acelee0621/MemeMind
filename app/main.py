@@ -14,6 +14,7 @@ from app.core.database import (
 from app.utils.migrations import run_migrations
 from app.api import doc_routes, query_routes
 from app.ui.gradio_interface import rag_demo_ui
+
 # 导入我们所有的模型加载器
 from app.chains.embedding_loader import get_bge_embeddings
 from app.chains.reranker_loader import get_bge_reranker

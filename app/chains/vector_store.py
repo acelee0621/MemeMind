@@ -4,20 +4,11 @@ from langchain_chroma import Chroma
 from app.core.config import settings
 from app.chains.embedding_loader import get_bge_embeddings
 
-# 注意：由于我们的工厂函数将变为异步，lru_cache不再适用。
-# 在FastAPI中，我们通常通过依赖注入系统来管理单例实例的生命周期，
-# 或者在应用启动时（lifespan）加载一次并存储为全局变量。
-# 在这个场景下，由于RAG链的创建依赖它，而RAG链本身会被缓存，
-# 间接地实现了单例效果，因此我们可以移除lru_cache。
-
-# (或者，如果想在异步函数上实现缓存，可以使用 aiohttp-client-cache 等库，
-# 但为了保持简单，我们暂时移除它，依赖上层调用者的缓存机制)
-
 
 def get_chroma_vector_store() -> Chroma:
     """
     连接到 ChromaDB 并返回一个 LangChain 兼容的 VectorStore 实例。
-    
+
     这个函数现在是一个同步的工厂，它内部配置了一个异步客户端。
     LangChain的Chroma类足够智能，可以处理同步和异步操作。
     """
@@ -29,7 +20,7 @@ def get_chroma_vector_store() -> Chroma:
         port = settings.CHROMA_PORT
         if not host or not port:
             raise ValueError("无效的 ChromaDB 配置, 请检查 CHROMA_HOST 和 CHROMA_PORT")
-        
+
         logger.info(f"配置 ChromaDB 连接: Host={host}, Port={port}")
 
         # --- 2. 创建 ChromaDB 异步 HTTP 客户端 ---
@@ -48,7 +39,9 @@ def get_chroma_vector_store() -> Chroma:
             embedding_function=embedding_function,
         )
 
-        logger.success(f"ChromaDB 向量存储组件初始化成功。集合: '{settings.CHROMA_COLLECTION_NAME}'")
+        logger.success(
+            f"ChromaDB 向量存储组件初始化成功。集合: '{settings.CHROMA_COLLECTION_NAME}'"
+        )
         return vector_store
 
     except Exception as e:

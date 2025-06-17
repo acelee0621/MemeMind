@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+
 from fastapi import APIRouter, Depends
 from loguru import logger
 from starlette.responses import StreamingResponse
@@ -8,11 +9,6 @@ from app.chains.qa_chain import get_standalone_retriever
 
 router = APIRouter(prefix="/query", tags=["Query & RAG"])
 
-# 依赖注入 QueryService
-# def get_query_service() -> QueryService:
-#     # 由于 QueryService 内部用 lru_cache 缓存了链，这里可以直接实例化
-#     return QueryService()
-
 
 async def get_query_service() -> QueryService:
     """异步创建并缓存 QueryService 实例"""
@@ -20,16 +16,18 @@ async def get_query_service() -> QueryService:
     query_service = await QueryService.create()
     return query_service
 
+
 # --- 新的、简化的请求和响应模型 ---
 class AskRequest(BaseModel):
     query: str
 
+
 class RetrieveRequest(BaseModel):
-    query: str    
+    query: str
     top_k: int = Field(5, gt=0, le=100, description="要返回的精排后文本块数量")
 
-# --- API 端点 ---
 
+# --- API 端点 ---
 @router.post("/ask/stream")
 async def stream_ask_llm_question(
     request: AskRequest,
@@ -42,8 +40,7 @@ async def stream_ask_llm_question(
         # service.stream_answer 返回一个异步生成器
         # StreamingResponse 可以直接消费这个生成器，将数据块实时发送给客户端
         return StreamingResponse(
-            query_service.stream_answer(request.query),
-            media_type="text/event-stream"
+            query_service.stream_answer(request.query), media_type="text/event-stream"
         )
     except Exception as e:
         logger.error(f"处理流式问答请求时出错: {e}", exc_info=True)
@@ -53,8 +50,9 @@ async def stream_ask_llm_question(
         return StreamingResponse(
             iter(["Error: An unexpected error occurred."]),
             media_type="text/event-stream",
-            status_code=500
+            status_code=500,
         )
+
 
 @router.post("/retrieve-chunks")
 async def retrieve_chunks_for_query(request: RetrieveRequest):
@@ -66,8 +64,7 @@ async def retrieve_chunks_for_query(request: RetrieveRequest):
     try:
         # 直接调用我们更新后的独立检索函数，并传入 top_k
         retrieved_docs = await get_standalone_retriever(
-            query=request.query,
-            top_k=request.top_k
+            query=request.query, top_k=request.top_k
         )
         return retrieved_docs
     except Exception as e:

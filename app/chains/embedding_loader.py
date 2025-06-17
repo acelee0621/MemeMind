@@ -5,14 +5,15 @@ from loguru import logger
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from app.core.config import settings
 
+
 class BGEInstructionalEmbeddings(HuggingFaceEmbeddings):
     """
     为 BAAI/bge 系列 embedding 模型定制的嵌入类。
-    
+
     它会自动为所有"查询"任务的文本添加BGE模型要求的特定指令。
     该类同时支持同步和异步操作。
     """
-    
+
     # BGE中文模型进行检索任务时，官方推荐的指令
     query_instruction: str = "为这个句子生成表示以用于检索相关文章："
 
@@ -29,6 +30,7 @@ class BGEInstructionalEmbeddings(HuggingFaceEmbeddings):
         """
         instructed_text = self.query_instruction + text
         return await super().aembed_query(instructed_text)
+
 
 @lru_cache(maxsize=1)
 def get_bge_embeddings() -> BGEInstructionalEmbeddings:
@@ -47,10 +49,10 @@ def get_bge_embeddings() -> BGEInstructionalEmbeddings:
     else:
         device = "cpu"
         logger.info("未检测到 CUDA 或 MPS，BGE Embedding 将使用 CPU。")
-    
+
     try:
         # 使用我们定制的 BGEInstructionalEmbeddings 类
-        bge_embeddings = BGEInstructionalEmbeddings(            
+        bge_embeddings = BGEInstructionalEmbeddings(
             model_name=settings.EMBEDDING_MODEL_PATH,
             model_kwargs={"device": device},
             encode_kwargs={

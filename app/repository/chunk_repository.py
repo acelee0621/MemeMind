@@ -72,7 +72,11 @@ class TextChunkRepository:
     async def get_by_ids(self, chunk_ids: list[int]) -> list[TextChunk]:
         if not chunk_ids:
             return []
-        query = select(TextChunk).where(TextChunk.id.in_(chunk_ids)).options(selectinload(TextChunk.source_document))
+        query = (
+            select(TextChunk)
+            .where(TextChunk.id.in_(chunk_ids))
+            .options(selectinload(TextChunk.source_document))
+        )
         result = await self.session.scalars(query)
         return list(result.all())
 

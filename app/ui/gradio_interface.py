@@ -134,7 +134,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
     t0 = time.monotonic()
     api_url = f"{FASTAPI_BASE_URL}/query/retrieve-chunks"
     payload = {"query": query, "top_k": top_k}
-    
+
     gr.Info("正在执行检索和精排...")
 
     try:
@@ -145,7 +145,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
 
         if not retrieved_docs:
             return pd.DataFrame(), "未检索到任何相关内容。"
-        
+
         data = [
             {
                 "相关度分数": f"{doc['metadata'].get('relevance_score', 0):.4f}",
@@ -159,7 +159,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
         t1 = time.monotonic()
         duration_str = f"检索完成，总耗时: {t1 - t0:.2f} 秒"
         return df, duration_str
-    
+
     except Exception as e:
         error_message = f"检索时出错: {e}"
         gr.Error(error_message)

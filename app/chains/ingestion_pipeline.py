@@ -6,7 +6,6 @@ from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain_unstructured import UnstructuredLoader
 
-
 from app.chains.vector_store import get_chroma_vector_store
 from app.core.config import settings
 from app.core.database import create_engine_and_session_for_celery
@@ -17,20 +16,27 @@ from app.services.chunk_service import TextChunkService
 from app.schemas.schemas import TextChunkCreate
 
 
-# --- 流水线的构建块 (基本保持不变) ---
-
+# --- 流水线的构建块 ---
 async def _load_docs(input_dict: dict) -> list[Document]:
     doc_record = input_dict["doc_record"]
     task_id = input_dict["task_id"]
-    logger.info(f"{task_id} [1/5 Load] 使用 UnstructuredLoader 加载文档: {doc_record.file_path}")
+    logger.info(
+        f"{task_id} [1/5 Load] 使用 UnstructuredLoader 加载文档: {doc_record.file_path}"
+    )
     loader = UnstructuredLoader(doc_record.file_path)
     loaded_docs = await asyncio.to_thread(loader.load)
     for doc in loaded_docs:
-        doc.metadata = {"original_filename": doc_record.original_filename, "source": doc_record.file_path}
+        doc.metadata = {
+            "original_filename": doc_record.original_filename,
+            "source": doc_record.file_path,
+        }
     return loaded_docs
 
+
 def _split_docs(documents: list[Document]) -> list[Document]:
-    logger.info(f"[2/5 Split] 使用 RecursiveCharacterTextSplitter 分割 {len(documents)} 个文档...")
+    logger.info(
+        f"[2/5 Split] 使用 RecursiveCharacterTextSplitter 分割 {len(documents)} 个文档..."
+    )
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.CHUNK_SIZE,
         chunk_overlap=settings.CHUNK_OVERLAP,
@@ -41,16 +47,19 @@ def _split_docs(documents: list[Document]) -> list[Document]:
     logger.success(f"[2/5 Split] 分割完成，产生 {len(chunks)} 个文本块。")
     return chunks
 
+
 async def _store_chunks_to_sql(input_dict: dict) -> list:
     chunks = input_dict["chunks"]
     document_id = input_dict["doc_record"].id
     text_chunk_service = input_dict["text_chunk_service"]
     task_id = input_dict["task_id"]
-    
-    logger.info(f"{task_id} [3/5 SQL Store] 准备将 {len(chunks)} 个文本块存入 PostgreSQL...")
+
+    logger.info(
+        f"{task_id} [3/5 SQL Store] 准备将 {len(chunks)} 个文本块存入 PostgreSQL..."
+    )
     if not chunks:
         return []
-        
+
     chunks_to_create = [
         TextChunkCreate(
             source_document_id=document_id,
@@ -60,9 +69,14 @@ async def _store_chunks_to_sql(input_dict: dict) -> list:
         )
         for i, doc in enumerate(chunks)
     ]
-    created_pydantic_chunks = await text_chunk_service.add_chunks_in_bulk(chunks_data=chunks_to_create)
-    logger.success(f"{task_id} [3/5 SQL Store] {len(created_pydantic_chunks)} 个文本块已存入 PostgreSQL。")
+    created_pydantic_chunks = await text_chunk_service.add_chunks_in_bulk(
+        chunks_data=chunks_to_create
+    )
+    logger.success(
+        f"{task_id} [3/5 SQL Store] {len(created_pydantic_chunks)} 个文本块已存入 PostgreSQL。"
+    )
     return created_pydantic_chunks
+
 
 async def _add_to_vector_store(input_dict: dict) -> int:
     split_docs = input_dict["chunks"]
@@ -73,21 +87,25 @@ async def _add_to_vector_store(input_dict: dict) -> int:
         logger.warning(f"{task_id} [4/5 Vector Store] 没有文本块需要存入向量库。")
         return 0
 
-    logger.info(f"{task_id} [4/5 Vector Store] 准备将 {len(split_docs)} 个文本块嵌入并存入 ChromaDB...")
-    
+    logger.info(
+        f"{task_id} [4/5 Vector Store] 准备将 {len(split_docs)} 个文本块嵌入并存入 ChromaDB..."
+    )
+
     ids_for_vector_db = [str(chunk.id) for chunk in sql_chunks]
     for i, doc in enumerate(split_docs):
         doc.metadata["text_chunk_pg_id"] = sql_chunks[i].id
 
     vector_store = get_chroma_vector_store()
-    
+
     await vector_store.aadd_documents(documents=split_docs, ids=ids_for_vector_db)
-    
-    logger.success(f"{task_id} [4/5 Vector Store] {len(split_docs)} 个文本块已成功嵌入并存入 ChromaDB。")
+
+    logger.success(
+        f"{task_id} [4/5 Vector Store] {len(split_docs)} 个文本块已成功嵌入并存入 ChromaDB。"
+    )
     return len(split_docs)
 
-# --- 主流水线运行函数 ---
 
+# --- 主流水线运行函数 ---
 async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
     """
     一个完整的、基于LCEL的文档注入流水线。
@@ -96,14 +114,14 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
     task_logger.info("开始执行基于LCEL的文档注入 Pipeline...")
 
     db_engine, SessionLocal = create_engine_and_session_for_celery()
-    
+
     # 将 source_doc_service 的创建提到 try 外部，以便 finally 块也能使用
     # 在Celery任务的上下文中，为每次任务调用创建一个新的会话和service实例是安全的
     async with SessionLocal() as db:
         doc_repo = SourceDocumentRepository(db)
         # 我们将复用这个 service 实例
         source_doc_service = SourceDocumentService(doc_repository=doc_repo)
-    
+
     try:
         async with SessionLocal() as db:
             # 重新获取与当前会话绑定的服务和仓库
@@ -111,18 +129,24 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
             source_doc_service_in_try = SourceDocumentService(doc_repository=doc_repo)
             chunk_repo = TextChunkRepository(db)
             text_chunk_service = TextChunkService(chunk_repo)
-            
+
             # --- 1. 准备工作：使用 service 层更新状态 ---
             await source_doc_service_in_try.update_document_processing_info(
                 document_id, status="processing"
             )
             doc_record = await doc_repo.get_by_id(document_id)
-            task_logger.info(f"状态更新为 'processing', 文件路径: '{doc_record.file_path}'")
+            task_logger.info(
+                f"状态更新为 'processing', 文件路径: '{doc_record.file_path}'"
+            )
 
             # --- 2. 定义LCEL流水线 ---
             ingestion_chain = (
-                RunnablePassthrough.assign(chunks=RunnableLambda(_load_docs) | RunnableLambda(_split_docs))
-                | RunnablePassthrough.assign(sql_chunks=RunnableLambda(_store_chunks_to_sql))
+                RunnablePassthrough.assign(
+                    chunks=RunnableLambda(_load_docs) | RunnableLambda(_split_docs)
+                )
+                | RunnablePassthrough.assign(
+                    sql_chunks=RunnableLambda(_store_chunks_to_sql)
+                )
                 | RunnableLambda(_add_to_vector_store)
             )
 
@@ -130,26 +154,32 @@ async def run_ingestion_pipeline(document_id: int, task_id_for_log: str):
             initial_input = {
                 "doc_record": doc_record,
                 "text_chunk_service": text_chunk_service,
-                "task_id": task_id_for_log
+                "task_id": task_id_for_log,
             }
             number_of_chunks = await ingestion_chain.ainvoke(initial_input)
-            
+
             # --- 4. 收尾工作：使用 service 层更新最终状态 ---
             if number_of_chunks > 0:
                 await source_doc_service_in_try.update_document_processing_info(
                     document_id,
                     status="ready",
                     number_of_chunks=number_of_chunks,
-                    set_processed_now=True, # service层会自动处理时间
-                    error_message=None
+                    set_processed_now=True,  # service层会自动处理时间
+                    error_message=None,
                 )
-                task_logger.success("[5/5 Finish] Pipeline 处理成功，文档状态更新为 'ready'。")
+                task_logger.success(
+                    "[5/5 Finish] Pipeline 处理成功，文档状态更新为 'ready'。"
+                )
                 return {"status": "success", "chunks_created": number_of_chunks}
             else:
                 await source_doc_service_in_try.update_document_processing_info(
-                    document_id, status="error", error_message="文档解析后未产生任何文本块"
+                    document_id,
+                    status="error",
+                    error_message="文档解析后未产生任何文本块",
                 )
-                task_logger.warning("[5/5 Finish] 文档解析后未产生任何文本块，任务终止。")
+                task_logger.warning(
+                    "[5/5 Finish] 文档解析后未产生任何文本块，任务终止。"
+                )
                 return {"status": "warning", "message": "No content to process."}
 
     except Exception as e:

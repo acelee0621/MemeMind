@@ -53,8 +53,6 @@ class SourceDocumentResponse(SourceDocumentBase):
 # ===================================================================
 # TextChunk 相关模型
 # ===================================================================
-
-
 class TextChunkBase(BaseSchema):
     chunk_text: str = Field(..., description="文本块的实际内容")
     sequence_in_document: int = Field(
@@ -84,8 +82,6 @@ class TextChunkResponse(TextChunkBase):
 # ===================================================================
 #     Message 相关模型 (全新补充)
 # ===================================================================
-
-
 class MessageBase(BaseSchema):
     author: MessageAuthor = Field(..., description="消息作者 (user 或 bot)")
     content: str = Field(..., description="消息内容 (用户的问题或模型的回答)")
