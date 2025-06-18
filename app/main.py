@@ -1,7 +1,5 @@
-import asyncio
-
 from loguru import logger
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 import gradio as gr
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -13,7 +11,7 @@ from app.core.database import (
 )
 
 from app.utils.migrations import run_migrations
-from app.api import doc_routes, query_routes
+from app.api import doc_routes, query_routes, health
 from app.ui.gradio_interface import rag_demo_ui
 from app.core.taskiq_app import broker
 
@@ -33,18 +31,9 @@ async def lifespan(app: FastAPI):
     logger.info("应用启动，开始并行加载所有资源...")
     await setup_database_connection()
     await broker.startup()
-    # 将所有同步的、耗时的启动任务都封装成一个可在事件循环中等待的对象
-    # 这样可以防止它们阻塞主线程
-    # startup_tasks = [
-    #     asyncio.to_thread(initialize_database_for_fastapi),
-    #     # asyncio.to_thread(get_bge_embeddings),
-    #     # asyncio.to_thread(get_bge_reranker),
-    #     # asyncio.to_thread(get_qwen_llm),
-    # ]
-
-    # 使用 asyncio.gather 来【并行】执行所有启动任务
-    # 这会比一个一个顺序执行要快得多
-    # await asyncio.gather(*startup_tasks)
+    get_bge_embeddings()
+    get_bge_reranker()
+    get_qwen_llm()    
 
     logger.info("所有资源加载完毕，应用准备就绪。🚀")
 
@@ -71,13 +60,9 @@ app.add_middleware(
 
 app.include_router(doc_routes.router)
 app.include_router(query_routes.router)
+app.include_router(health.router)
 
-# vvv 将 Gradio 应用挂载到 FastAPI vvv
+# --- 将 Gradio 应用挂载到 FastAPI ---
 # 这会在应用下创建一个 /gradio 路径，用于展示 UI 界面
 app = gr.mount_gradio_app(app, rag_demo_ui, path="/gradio")
 
-
-@app.get("/health")
-async def health_check(response: Response):
-    response.status_code = 200
-    return {"status": "ok 👍 "}

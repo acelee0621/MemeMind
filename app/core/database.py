@@ -1,4 +1,4 @@
-from typing import Optional, AsyncGenerator
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
@@ -12,8 +12,8 @@ from app.models.models import Base
 
 # --- 1. 全局变量定义 ---
 # 这些全局变量将由各自的启动逻辑来填充。
-engine: Optional[AsyncEngine] = None
-SessionLocal: Optional[async_sessionmaker[AsyncSession]] = None
+engine: AsyncEngine | None = None
+SessionLocal: async_sessionmaker[AsyncSession] | None = None
 
 POSTGRES_DATABASE_URL = (
     f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}"

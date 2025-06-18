@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     RERANKER_MODEL_PATH: str = "local_models/reranker/bge-reranker-v2-m3"
 
     # LLM 模型 (Qwen)
-    LLM_MODEL_PATH: str = "local_models/llm/Qwen3-1.7B"
+    LLM_MODEL_PATH: str = "local_models/llm/Qwen3-4B"
 
     # 检索参数
     CHUNK_SIZE: int = 800

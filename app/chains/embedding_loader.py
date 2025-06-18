@@ -6,6 +6,12 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from app.core.config import settings
 
 
+""" 下载新模型命令
+    uv run huggingface-cli download BAAI/bge-large-zh-v1.5 /
+    --local-dir ./local_models/embedding/bge-large-zh-v1.5
+"""
+
+
 class BGEInstructionalEmbeddings(HuggingFaceEmbeddings):
     """
     为 BAAI/bge 系列 embedding 模型定制的嵌入类。
