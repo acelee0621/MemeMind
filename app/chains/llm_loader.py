@@ -1,7 +1,6 @@
 from functools import lru_cache
 
 from loguru import logger
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain_huggingface import HuggingFacePipeline
 from app.core.config import settings
