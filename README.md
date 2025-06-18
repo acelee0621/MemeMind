@@ -1,4 +1,4 @@
-[中文文档](https://github.com/acelee0621/mememind/blob/main/README_zh.md)
+[中文文档](https://github.com/acelee0621/MemeMind/blob/langchain/README_zh.md)
 
 # MemeMind - Local RAG Knowledge Base Demo (LangChain Version)
 
