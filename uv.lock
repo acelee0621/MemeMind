@@ -1589,7 +1589,6 @@ name = "mememind"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "accelerate" },
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "chromadb" },
@@ -1604,7 +1603,6 @@ dependencies = [
     { name = "libmagic" },
     { name = "loguru" },
     { name = "lxml" },
-    { name = "pandas" },
     { name = "pydantic-settings" },
     { name = "python-docx" },
     { name = "sentence-transformers" },
@@ -1615,12 +1613,10 @@ dependencies = [
     { name = "torch" },
     { name = "transformers" },
     { name = "unstructured", extra = ["docx", "local-inference", "md", "pdf", "pptx", "xlsx"] },
-    { name = "unstructured-client" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "accelerate", specifier = ">=1.7.0" },
     { name = "alembic", specifier = ">=1.16.1" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "chromadb", specifier = ">=1.0.11" },
@@ -1635,7 +1631,6 @@ requires-dist = [
     { name = "libmagic", specifier = ">=1.0" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "lxml", specifier = ">=5.4.0" },
-    { name = "pandas", specifier = ">=2.3.0" },
     { name = "pydantic-settings", specifier = ">=2.9.1" },
     { name = "python-docx", specifier = ">=1.1.2" },
     { name = "sentence-transformers", specifier = ">=4.1.0" },
@@ -1646,7 +1641,6 @@ requires-dist = [
     { name = "torch", specifier = ">=2.7.0" },
     { name = "transformers", specifier = ">=4.52.3" },
     { name = "unstructured", extras = ["docx", "local-inference", "md", "pdf", "pptx", "xlsx"], specifier = ">=0.17.2" },
-    { name = "unstructured-client", specifier = ">=0.25.9" },
 ]
 
 [[package]]
