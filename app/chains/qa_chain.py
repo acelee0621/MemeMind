@@ -33,7 +33,7 @@ def format_docs(docs: list[Document]) -> str:
     return "\n\n".join(formatted_docs)
 
 
-# 新增函数：将 LangChain prompt 转换为 Qwen3 聊天模板格式
+# 将 LangChain prompt 转换为 Qwen3 聊天模板格式
 def apply_qwen3_chat_template(input_dict: dict) -> str:
     # 这里的 tokenizer 应该和 get_qwen_llm 里的是同一个实例
     # 由于 get_qwen_llm 做了 lru_cache，我们可以安全地再次调用它来获取 tokenizer
@@ -48,7 +48,7 @@ def apply_qwen3_chat_template(input_dict: dict) -> str:
     # 这里的指令需要融入到 system role 或 user role 中
     # 我们可以将 RAG 指令作为 system role，或者作为 user role 的一部分
 
-    # 建议使用 system role 来承载 RAG 指令，这样更清晰
+    # 这里使用 system role 来承载 RAG 指令，这样更清晰
     system_instruction = (
         "你是一位知识助手。请严格按照“参考资料”回答“问题”。\n"
         "你的回答必须满足以下要求：\n"
