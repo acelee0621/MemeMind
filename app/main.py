@@ -9,9 +9,8 @@ from app.core.database import (
     setup_database_connection,
     shutdown_database_connection,
 )
-
 from app.utils.migrations import run_migrations
-from app.api import doc_routes, query_routes, health
+from app.api import doc_routes, query_routes, dify_routes, health
 from app.ui.gradio_interface import rag_demo_ui
 from app.core.taskiq_app import broker
 
@@ -33,7 +32,7 @@ async def lifespan(app: FastAPI):
     await broker.startup()
     get_bge_embeddings()
     get_bge_reranker()
-    get_qwen_llm()    
+    get_qwen_llm()
 
     logger.info("所有资源加载完毕，应用准备就绪。🚀")
 
@@ -61,8 +60,9 @@ app.add_middleware(
 app.include_router(doc_routes.router)
 app.include_router(query_routes.router)
 app.include_router(health.router)
+app.include_router(dify_routes.router)
+
 
 # --- 将 Gradio 应用挂载到 FastAPI ---
 # 这会在应用下创建一个 /gradio 路径，用于展示 UI 界面
 app = gr.mount_gradio_app(app, rag_demo_ui, path="/gradio")
-

@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 100
     INITIAL_RETRIEVAL_TOP_K: int = 50  # 向量库粗召回返回的文档数量
     FINAL_CONTEXT_TOP_N: int = 5  # Reranker精排后最终提供给LLM的文档数量
+    
+    # Dify API Key
+    DIFY_API_KEY: str = "your-super-secret-key-for-dify"
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"
