@@ -10,7 +10,7 @@ from app.core.database import (
     shutdown_database_connection,
 )
 from app.utils.migrations import run_migrations
-from app.api import doc_routes, query_routes, dify_routes, health
+from app.api import doc_routes, query_routes, health
 from app.ui.gradio_interface import rag_demo_ui
 from app.core.taskiq_app import broker
 
@@ -60,7 +60,6 @@ app.add_middleware(
 app.include_router(doc_routes.router)
 app.include_router(query_routes.router)
 app.include_router(health.router)
-app.include_router(dify_routes.router)
 
 
 # --- 将 Gradio 应用挂载到 FastAPI ---
