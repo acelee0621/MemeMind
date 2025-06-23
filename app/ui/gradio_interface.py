@@ -12,38 +12,46 @@ FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 # ===================================================================
 
 
-async def stream_chat_gradio(query: str, history: list[list[str]]):
+async def chat_gradio(query: str, history: list[list[str]]):
     """
-    【问答模块】通过 httpx 调用流式 API (使用稳定数据格式)
+    【问答模块】通过 httpx 调用非流式 API，一次性获取答案
     """
     if not query or not query.strip():
         gr.Warning("请输入有效的问题！")
-        # 当输入无效时，返回原始历史记录，不作改动
-        yield "", history
+        yield history # 返回原历史，不做改动
         return
 
-    # history 的数据结构现在是: [[user, bot], [user, bot], ...]
-    # 为当前对话新增一个条目，包含用户问题和一个空的助手回复占位符
-    history.append([query, ""])
+    # history 的数据结构为: [[user, bot], [user, bot], ...]
+    history.append([query, None]) # 用 None 作为加载中的占位符
+    
+    # 立即更新UI，显示用户问题和加载状态
+    yield history
 
-    api_url = f"{FASTAPI_BASE_URL}/query/ask/stream"
+    # 指向我们新增的非流式端点
+    api_url = f"{FASTAPI_BASE_URL}/query/ask"
     payload = {"query": query}
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            async with client.stream("POST", api_url, json=payload) as response:
-                response.raise_for_status()
-                # 异步迭代流式响应的文本块
-                async for chunk in response.aiter_text():
-                    if chunk:
-                        # 将新的文本块追加到 history 最后一个条目的第二个元素（即助手的回复）上
-                        history[-1][1] += chunk
-                        # 返回清空后的输入框和更新后的 history，以刷新 Chatbot UI
-                        yield "", history
+            # 使用 client.post 而不是 client.stream
+            response = await client.post(api_url, json=payload)
+            response.raise_for_status()
+            
+            # 解析完整的JSON响应
+            result = response.json()
+            answer = result.get("response", "未能获取到回答。")
+            
+            # 将最终答案填入 history
+            history[-1][1] = answer
+            
+            # 再次更新UI，显示最终答案
+            yield history
+
     except Exception as e:
         # 如果出错，将错误信息填入助手的回复中
         history[-1][1] = f"请求出错: {e}"
-        yield "", history
+        yield history
+
 
 
 async def get_all_docs_gradio():
@@ -183,9 +191,9 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
     gr.Markdown("# MemeMind RAG 应用控制台")
     with gr.Tabs():
         with gr.TabItem("智能问答"):
-            # ... (智能问答 Tab 保持不变)
             with gr.Row():
                 with gr.Column(scale=4):
+                    # 移除 type="messages"，使用 list of lists 格式
                     chatbot = gr.Chatbot(label="对话窗口", height=500)
                     query_input = gr.Textbox(
                         label="您的问题",
@@ -237,10 +245,11 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
 
     # --- 事件绑定 ---
     query_input.submit(
-        fn=stream_chat_gradio,
+        fn=chat_gradio,  # <--- 调用新的非流式函数
         inputs=[query_input, chatbot],
-        outputs=[query_input, chatbot],
-    )
+        outputs=[chatbot],  # <--- 输出只更新 chatbot
+    ).then(lambda: "", outputs=[query_input])  # <--- 使用 .then 清空输入框
+
     clear_button.click(lambda: (None, []), outputs=[query_input, chatbot])
 
     doc_management_tab.select(fn=get_all_docs_gradio, outputs=[file_list_df])

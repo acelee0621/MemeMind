@@ -1,9 +1,9 @@
 # app/chains/qa_chain.py
-
+import re
 from loguru import logger
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
 from app.core.config import settings
@@ -21,6 +21,14 @@ def format_docs(docs: list[Document]) -> str:
         f"--- 相关文档 {i + 1} (来源: {doc.metadata.get('original_filename', '未知来源')}) ---\n{doc.page_content}"
         for i, doc in enumerate(docs)
     )
+    
+def clean_llm_output(text: str) -> str:
+    """
+    使用正则表达式移除 <think>...</think> 标签及其内容。
+    """
+    # re.DOTALL 使得 '.' 可以匹配包括换行在内的任意字符
+    cleaned_text = re.sub(r'<think>.*?</think>\s*', '', text, flags=re.DOTALL)
+    return cleaned_text.strip()
 
 
 async def create_rag_qa_chain():
@@ -66,6 +74,7 @@ async def create_rag_qa_chain():
         | prompt
         | llm
         | StrOutputParser()
+        | RunnableLambda(clean_llm_output)
     )
 
     task_logger.success("基于 Ollama 的 RAG 问答链创建成功！")

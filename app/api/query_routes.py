@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 from starlette.responses import StreamingResponse
 
@@ -28,7 +28,7 @@ class RetrieveRequest(BaseModel):
 
 
 # --- API 端点 ---
-@router.post("/ask/stream")
+@router.post("/ask/stream")  # 使用Ollama模型时，流式传输就不好用了，暂时留着
 async def stream_ask_llm_question(
     request: AskRequest,
     query_service: QueryService = Depends(get_query_service),
@@ -69,3 +69,20 @@ async def retrieve_chunks_for_query(request: RetrieveRequest):
     except Exception as e:
         logger.error(f"调试检索时出错: {e}", exc_info=True)
         return {"error": str(e)}
+    
+    
+@router.post("/ask")
+async def ask_llm_question(
+    request: AskRequest,
+    query_service: QueryService = Depends(get_query_service),
+):
+    """
+    接收用户查询，一次性返回 RAG 链生成的完整答案。
+    """
+    try:
+        # 使用 .ainvoke() 而不是 .astream() 来获取完整答案
+        full_response = await query_service.rag_chain.ainvoke(request.query)
+        return {"response": full_response}
+    except Exception as e:
+        logger.error(f"处理非流式问答请求时出错: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
