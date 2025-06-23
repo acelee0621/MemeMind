@@ -57,12 +57,11 @@ async def stream_ask_llm_question(
 @router.post("/retrieve-chunks")
 async def retrieve_chunks_for_query(request: RetrieveRequest):
     """
-    用于调试的端点，仅执行检索和精排，返回最终的上下文文档。
-    支持自定义 top_k。
+    用于调试的端点，仅执行向量检索，返回 top_k 个最相关的文本块。
     """
     logger.info(f"执行调试检索，查询: '{request.query}', top_k: {request.top_k}")
     try:
-        # 直接调用我们更新后的独立检索函数，并传入 top_k
+        # 直接调用我们简化的独立检索函数
         retrieved_docs = await get_standalone_retriever(
             query=request.query, top_k=request.top_k
         )

@@ -16,7 +16,6 @@ from app.core.taskiq_app import broker
 
 # 导入我们所有的模型加载器
 from app.chains.embedding_loader import get_bge_embeddings
-from app.chains.reranker_loader import get_bge_reranker
 from app.chains.llm_loader import get_qwen_llm
 
 
@@ -30,8 +29,7 @@ async def lifespan(app: FastAPI):
     logger.info("应用启动，开始并行加载所有资源...")
     await setup_database_connection()
     await broker.startup()
-    get_bge_embeddings()
-    get_bge_reranker()
+    get_bge_embeddings()    
     get_qwen_llm()
 
     logger.info("所有资源加载完毕，应用准备就绪。🚀")

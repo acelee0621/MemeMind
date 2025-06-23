@@ -30,25 +30,15 @@ class Settings(BaseSettings):
     CHROMA_PORT: int = 5500
     CHROMA_COLLECTION_NAME: str = "mememind_rag_collection"
 
-    # --- RAG 核心配置 ---
-
-    # Embedding 模型 (BAAI BGE)
-    EMBEDDING_MODEL_PATH: str = "local_models/embedding/bge-large-zh-v1.5"
-
-    # Reranker 模型 (BAAI BGE)
-    RERANKER_MODEL_PATH: str = "local_models/reranker/bge-reranker-v2-m3"
-
-    # LLM 模型 (Qwen)
-    LLM_MODEL_PATH: str = "local_models/llm/Qwen3-4B"
+    # --- RAG 核心配置 (已更新为 Ollama) ---
+    OLLAMA_BASE_URL: str = "http://localhost:11434"  # Ollama API 地址
+    OLLAMA_EMBEDDING_MODEL: str = "bge-m3:latest"  # Embedding 模型
+    OLLAMA_LLM_MODEL: str = "deepseek-r1:1.5b"  # LLM 模型
 
     # 检索参数
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 100
-    INITIAL_RETRIEVAL_TOP_K: int = 50  # 向量库粗召回返回的文档数量
-    FINAL_CONTEXT_TOP_N: int = 5  # Reranker精排后最终提供给LLM的文档数量
-    
-    # Dify API Key
-    DIFY_API_KEY: str = "your-super-secret-key-for-dify"
+    FINAL_CONTEXT_TOP_K: int = 10
 
     model_config = SettingsConfigDict(
         env_file=(".env", ".env.local"), env_file_encoding="utf-8"

@@ -12,28 +12,37 @@ FASTAPI_BASE_URL = "http://127.0.0.1:8000"
 # ===================================================================
 
 
-async def stream_chat_gradio(query: str, history: list[dict]):
-    """【问答模块】通过 httpx 调用流式 API"""
+async def stream_chat_gradio(query: str, history: list[list[str]]):
+    """
+    【问答模块】通过 httpx 调用流式 API (使用稳定数据格式)
+    """
     if not query or not query.strip():
         gr.Warning("请输入有效的问题！")
+        # 当输入无效时，返回原始历史记录，不作改动
+        yield "", history
         return
+
+    # history 的数据结构现在是: [[user, bot], [user, bot], ...]
+    # 为当前对话新增一个条目，包含用户问题和一个空的助手回复占位符
+    history.append([query, ""])
 
     api_url = f"{FASTAPI_BASE_URL}/query/ask/stream"
     payload = {"query": query}
-    history.append({"role": "user", "content": query})
-    history.append({"role": "assistant", "content": ""})
 
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            # 使用 client.stream 发起流式请求
             async with client.stream("POST", api_url, json=payload) as response:
                 response.raise_for_status()
+                # 异步迭代流式响应的文本块
                 async for chunk in response.aiter_text():
                     if chunk:
-                        history[-1]["content"] += chunk
+                        # 将新的文本块追加到 history 最后一个条目的第二个元素（即助手的回复）上
+                        history[-1][1] += chunk
+                        # 返回清空后的输入框和更新后的 history，以刷新 Chatbot UI
                         yield "", history
     except Exception as e:
-        history[-1]["content"] = f"请求出错: {e}"
+        # 如果出错，将错误信息填入助手的回复中
+        history[-1][1] = f"请求出错: {e}"
         yield "", history
 
 
@@ -124,7 +133,7 @@ async def delete_doc_gradio(doc_id_str: str):
 
 async def retrieve_chunks_gradio(query: str, top_k: int):
     """
-    【检索测试】通过 httpx 调用 API，并展示精排后的文档及其相关度分数。
+    【检索测试】通过 httpx 调用 API，并展示向量检索后的文档。
     """
     if not query or not query.strip():
         gr.Warning("请输入有效的查询内容！")
@@ -135,7 +144,7 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
     api_url = f"{FASTAPI_BASE_URL}/query/retrieve-chunks"
     payload = {"query": query, "top_k": top_k}
 
-    gr.Info("正在执行检索和精排...")
+    gr.Info("正在执行向量检索...")
 
     try:
         async with httpx.AsyncClient(timeout=120.0) as client:
@@ -146,9 +155,9 @@ async def retrieve_chunks_gradio(query: str, top_k: int):
         if not retrieved_docs:
             return pd.DataFrame(), "未检索到任何相关内容。"
 
+        # 注意：现在没有 'relevance_score' 了，我们只展示基础信息
         data = [
             {
-                "相关度分数": f"{doc['metadata'].get('relevance_score', 0):.4f}",
                 "文本块内容": doc["page_content"],
                 "来源文件名": doc["metadata"].get("original_filename", "未知来源"),
             }
@@ -177,7 +186,7 @@ with gr.Blocks(title="RAG 应用控制台", theme=gr.themes.Soft()) as rag_demo_
             # ... (智能问答 Tab 保持不变)
             with gr.Row():
                 with gr.Column(scale=4):
-                    chatbot = gr.Chatbot(label="对话窗口", height=500, type="messages")
+                    chatbot = gr.Chatbot(label="对话窗口", height=500)
                     query_input = gr.Textbox(
                         label="您的问题",
                         placeholder="在这里输入你的问题...",
