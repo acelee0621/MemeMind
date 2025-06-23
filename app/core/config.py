@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     # --- RAG 核心配置 (已更新为 Ollama) ---
     OLLAMA_BASE_URL: str = "http://localhost:11434"  # Ollama API 地址
     OLLAMA_EMBEDDING_MODEL: str = "bge-m3:latest"  # Embedding 模型
-    OLLAMA_LLM_MODEL: str = "deepseek-r1:7b"  # LLM 模型
+    OLLAMA_LLM_MODEL: str = "deepseek-r1:8b"  # LLM 模型    
 
     # 检索参数
     CHUNK_SIZE: int = 800
